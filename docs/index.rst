@@ -1,6 +1,6 @@
-.. {{cookiecutter.project_slug}} documentation master file
+.. pegasus-wrapper documentation master file
 
-Welcome to {{cookiecutter.project_slug}}'s documentation!
+Welcome to pegasus-wrapper's documentation!
 ================================================
 
 .. toctree::

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# {{cookiecutter.project_slug}} documentation build configuration file, created by
+# pegasus-wrapper documentation build configuration file, created by
 # sphinx-quickstart on Fri Oct 12 16:20:00 2018.
 #
 # This file is execfile()d with the current directory set to its
@@ -52,9 +52,9 @@ source_suffix = ".rst"
 master_doc = "index"
 
 # General information about the project.
-project = "{{cookiecutter.project_slug}}"
+project = "pegasus-wrapper"
 copyright = "2019, Information Sciences Institute"
-author = "{{cookiecutter.full_name}}"
+author = "Jacob Lichtefeld"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -124,7 +124,7 @@ html_sidebars = {
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = "{{cookiecutter.project_slug}}doc"
+htmlhelp_basename = "pegasus-wrapperdoc"
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -150,9 +150,9 @@ latex_elements = {
 latex_documents = [
     (
         master_doc,
-        "{{cookiecutter.project_slug}}.tex",
-        "{{cookiecutter.project_slug}} Documentation",
-        "{{cookiecutter.full_name}}",
+        "pegasus-wrapper.tex",
+        "pegasus-wrapper Documentation",
+        "Jacob Lichtefeld",
         "manual",
     )
 ]
@@ -165,8 +165,8 @@ latex_documents = [
 man_pages = [
     (
         master_doc,
-        "{{cookiecutter.project_slug}}",
-        "{{cookiecutter.project_slug}} Documentation",
+        "pegasus-wrapper",
+        "pegasus-wrapper Documentation",
         [author],
         1,
     )
@@ -181,10 +181,10 @@ man_pages = [
 texinfo_documents = [
     (
         master_doc,
-        "{{cookiecutter.project_slug}}",
-        "{{cookiecutter.project_slug}} Documentation",
+        "pegasus-wrapper",
+        "pegasus-wrapper Documentation",
         author,
-        "{{cookiecutter.project_slug}}",
+        "pegasus-wrapper",
         "One line description of project.",
         "Miscellaneous",
     )

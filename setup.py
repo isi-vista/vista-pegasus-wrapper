@@ -6,17 +6,17 @@ from os.path import abspath, dirname, join
 from setuptools import find_packages
 
 with open(
-    join(dirname(abspath(__file__)), "{{cookiecutter.project_slug}}", "version.py")
+    join(dirname(abspath(__file__)), "pegasus-wrapper", "version.py")
 ) as version_file:
     exec(compile(version_file.read(), "version.py", "exec"))
 
 setup(
-    name="{{cookiecutter.project_slug}}",
+    name="pegasus-wrapper",
     version=version,  # noqa
-    author="{{cookiecutter.full_name}}",
-    author_email="{{cookiecutter.email}}",
-    description="{{cookiecutter.project_short_description}}",
-    url="{{cookiecutter.github_url}}",
+    author="Jacob Lichtefeld",
+    author_email="jalichtefeld@gmail.com",
+    description="A higher-level API for ISI Pegasus, adapted to the quirks of the ISI Vista group",
+    url="https://github.com/isi-vista/vista-pegasus-wrapper",
     packages=[],
     # 3.6 and up, but not Python 4
     python_requires="~=3.6",
