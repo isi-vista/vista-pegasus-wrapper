@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# pegasus-wrapper documentation build configuration file, created by
+# pegasus_wrapper documentation build configuration file, created by
 # sphinx-quickstart on Fri Oct 12 16:20:00 2018.
 #
 # This file is execfile()d with the current directory set to its
@@ -52,7 +52,7 @@ source_suffix = ".rst"
 master_doc = "index"
 
 # General information about the project.
-project = "pegasus-wrapper"
+project = "pegasus_wrapper"
 copyright = "2019, Information Sciences Institute"
 author = "Jacob Lichtefeld"
 
@@ -150,8 +150,8 @@ latex_elements = {
 latex_documents = [
     (
         master_doc,
-        "pegasus-wrapper.tex",
-        "pegasus-wrapper Documentation",
+        "pegasus_wrapper.tex",
+        "pegasus_wrapper Documentation",
         "Jacob Lichtefeld",
         "manual",
     )
@@ -165,8 +165,8 @@ latex_documents = [
 man_pages = [
     (
         master_doc,
-        "pegasus-wrapper",
-        "pegasus-wrapper Documentation",
+        "pegasus_wrapper",
+        "pegasus_wrapper Documentation",
         [author],
         1,
     )
@@ -181,10 +181,10 @@ man_pages = [
 texinfo_documents = [
     (
         master_doc,
-        "pegasus-wrapper",
-        "pegasus-wrapper Documentation",
+        "pegasus_wrapper",
+        "pegasus_wrapper Documentation",
         author,
-        "pegasus-wrapper",
+        "pegasus_wrapper",
         "One line description of project.",
         "Miscellaneous",
     )

@@ -1,7 +1,7 @@
 default:
 	@echo "an explicit target is required"
 
-SOURCE_DIR_NAME=pegasus-wrapper
+SOURCE_DIR_NAME=pegasus_wrapper
 
 PYTEST:=pytest --supress-no-test-exit-code
 
