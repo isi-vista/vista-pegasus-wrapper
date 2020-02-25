@@ -1,6 +1,6 @@
 .. pegasus-wrapper documentation master file
 
-Welcome to pegasus-wrapper's documentation!
+Welcome to pegasus_wrapper's documentation!
 ================================================
 
 .. toctree::

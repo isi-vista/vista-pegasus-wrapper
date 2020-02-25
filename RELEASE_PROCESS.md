@@ -1,6 +1,6 @@
-* double-check the version number in `pegasus-wrapper/version.py` matches the desired release version
+* double-check the version number in `pegasus_wrapper/version.py` matches the desired release version
 * run `towncrier` and commit the updated changelog
 * be sure `dist` is empty
 * `python setup.py sdist bdist_wheel`
 * `twine upload dist/*`
-* bump version number in `pegasus-wrapper/version.py`
+* bump version number in `pegasus_wrapper/version.py`

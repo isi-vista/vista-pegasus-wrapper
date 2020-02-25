@@ -1,5 +1,5 @@
 [tool.towncrier]
-    package="pegasus-wrapper"
+    package="pegasus_wrapper"
     filename="CHANGELOG.md"
     issue_format = "`#{issue} <https://github.com/isi-vista/vista-pegasus-wrapper/issues/{issue}>`_"
 
