@@ -24,6 +24,12 @@ class CondaJobBase(PegasusJobBase):
     conda_environment_name: str
 
     @abstractmethod
+    def to_submit_script(self) -> Path:
+        """
+        Create a script which invokes a conda venv to run the requested job in a VM
+        """
+
+    @abstractmethod
     def to_pegasus_job(self) -> Any:
         """
         Create and return a pegasus job object
