@@ -1,7 +1,7 @@
 [tool.towncrier]
-    package="{{cookiecutter.project_slug}}"
+    package="pegasus-wrapper"
     filename="CHANGELOG.md"
-    issue_format = "`#{issue} <{{cookiecutter.github_url}}/issues/{issue}>`_"
+    issue_format = "`#{issue} <https://github.com/isi-vista/vista-pegasus-wrapper/issues/{issue}>`_"
 
     [[tool.towncrier.type]]
         directory = "breaking"
