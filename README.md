@@ -1,7 +1,3 @@
-
-* TODO: By default the build badge is for Travis CI.  There is a commented example of an Appveyor CI badge you can use instead.
-* TODO: Add codecov token to `.travis.yml`
-
 <!-- 
 [![Build status](https://ci.appveyor.com/api/projects/status/3jhdnwreqoni1492/branch/master?svg=true)](https://ci.appveyor.com/project/isi-vista/vista-pegasus-wrapper/branch/master) 
 -->
