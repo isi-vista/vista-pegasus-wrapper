@@ -4,7 +4,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = python -msphinx
-SPHINXPROJ    = pegasus-wrapper
+SPHINXPROJ    = pegasus_wrapper
 SOURCEDIR     = .
 BUILDDIR      = _build
 

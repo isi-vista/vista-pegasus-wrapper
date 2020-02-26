@@ -1,10 +1,21 @@
 language: python
 python:
-  - "2.7"
-  - "3.4"
-  - "3.5"
-  - "3.6"
-  - "pypy"
-install: 
-  - "pip install -r requirements-dev.txt"
-script: pytest
+    - "3.6"
+
+cache:
+    pip: true
+
+install:
+    - pip install -r requirements.txt
+    - pip install codecov
+
+jobs:
+    include:
+        - stage: test
+          script:
+              - echo "python version $(python --version) running"
+              - echo "pip version $(pip --version) running"
+              - make check coverage
+
+after_success:
+  - codecov -t 37a4eff3-f4bc-49fe-a6cf-d28e329be5c8
