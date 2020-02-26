@@ -17,5 +17,5 @@ jobs:
               - echo "pip version $(pip --version) running"
               - make check coverage
 
-#after_success:
-#  - codecov -t CODE_COV_TOKEN_HERE
+after_success:
+  - codecov -t 37a4eff3-f4bc-49fe-a6cf-d28e329be5c8
