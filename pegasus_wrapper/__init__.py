@@ -26,11 +26,12 @@ from vistautils.memory_amount import MemoryAmount
 from vistautils.range import Range
 
 from pegasus_wrapper.version import version as __version__  # noqa
-from saga_tools.slurm_run_python import SlurmPythonRunner
 
 from Pegasus.api import Job
 from Pegasus.DAX3 import Namespace, Profile
 from typing_extensions import Protocol
+
+from saga_tools import to_slurm_memory_string
 
 
 class DependencyNode:
@@ -92,7 +93,7 @@ class SlurmResourceRequest(ResourceRequest):
             num_cpus=self.num_cpus,
             num_gpus=self.num_gpus,
             job_name=job_name,
-            mem_str=SlurmPythonRunner.to_slurm_memory_string(self.memory),
+            mem_str=to_slurm_memory_string(self.memory),
         )
         job.add_profiles(
             Profile(Namespace.PEGASUS, "glite.arguments", slurm_resource_content)

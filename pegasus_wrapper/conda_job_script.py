@@ -7,9 +7,10 @@ from attr import attrs
 from vistautils.parameters import Parameters
 from vistautils.parameters_only_entrypoint import parameters_only_entry_point
 
-from saga_tools.slurm_run_python import CondaConfiguration, SpackConfiguration
-
 import temppathlib
+
+from saga_tools.conda import CondaConfiguration
+from saga_tools.spack import SpackConfiguration
 
 
 def main(params: Parameters):
