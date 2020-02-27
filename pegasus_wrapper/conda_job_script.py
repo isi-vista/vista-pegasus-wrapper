@@ -1,35 +1,3 @@
-"""
-A driver to create a shell script in order to run a python program in a conda virtual environment.
-
-The program takes a parameters file as input to generate the executable script. The script can be
-used as an executable job for Pegasus so that a job can be run in a venv as the default pegasus
-jobs do not run in one.
-
-The generated script is based on
-https://github.com/isi-vista/saga-tools/blob/master/saga_tools/slurm_run_python.py
-with the slurm related configuration removed.
-
-####################
-Conda Job Parameters
-####################
-* *conda_base_path*: path to the base of the conda install (not the *bin* directory)
-* *conda_environment*: name of the conda
-    environment to run in
-* *spack_environment*: (optional): the spack environment, if any, to run in.
-    Cannot appear with *spack_packages*.
-* *spack_packages*: (optional): a YAML list of Spack packages to load (in *module@version* format).
-* *spack_root*: the spack installation to use (necessary only if *spack_environment*
-    or *spack_modules*) is specified. This is usually the path to a working
-    copy of a spack repository.
-* *entry_point*: the name of the module to run, e.g. vistautils.scripts.foo
-* *conda_script_path*: the file to write the conda job script to.
-* *job_param_file* (optional): the param file to call
-    the job with
-* *job_name* (optional): The name of the job running via the script, defaults to entry_point
-* *working_directory* (optional)
-* *echo_template* (optional boolean, default False): whether to echo the generated
-    job script (for debugging).
-"""
 import os
 from pathlib import Path
 from typing import Optional
@@ -60,6 +28,38 @@ def main(params: Parameters):
 
 @attrs(frozen=True, slots=True)
 class CondaJobScriptGenerator:
+    """
+    A driver to create a shell script in order to run a python program in a conda virtual environment.
+
+    The program takes a parameters file as input to generate the executable script. The script can be
+    used as an executable job for Pegasus so that a job can be run in a venv as the default pegasus
+    jobs do not run in one.
+
+    The generated script is based on
+    https://github.com/isi-vista/saga-tools/blob/master/saga_tools/slurm_run_python.py
+    with the slurm related configuration removed.
+
+    ####################
+    Conda Job Parameters
+    ####################
+    * *conda_base_path*: path to the base of the conda install (not the *bin* directory)
+    * *conda_environment*: name of the conda
+        environment to run in
+    * *spack_environment*: (optional): the spack environment, if any, to run in.
+        Cannot appear with *spack_packages*.
+    * *spack_packages*: (optional): a YAML list of Spack packages to load (in *module@version* format).
+    * *spack_root*: the spack installation to use (necessary only if *spack_environment*
+        or *spack_modules*) is specified. This is usually the path to a working
+        copy of a spack repository.
+    * *entry_point*: the name of the module to run, e.g. vistautils.scripts.foo
+    * *conda_script_path*: the file to write the conda job script to.
+    * *job_param_file* (optional): the param file to call
+        the job with
+    * *job_name* (optional): The name of the job running via the script, defaults to entry_point
+    * *working_directory* (optional)
+    * *echo_template* (optional boolean, default False): whether to echo the generated
+        job script (for debugging).
+    """
     conda_config: Optional[CondaConfiguration]
     spack_config: Optional[SpackConfiguration]
 
