@@ -16,6 +16,7 @@ Terminology
 """
 # pylint:disable=missing-docstring
 from abc import abstractmethod
+from pathlib import Path
 
 from attr import attrib, attrs
 from attr.validators import in_, instance_of
@@ -24,9 +25,11 @@ from immutablecollections import ImmutableSet
 from vistautils.memory_amount import MemoryAmount
 from vistautils.range import Range
 
-from Pegasus.api import Job
 from pegasus_wrapper.version import version as __version__  # noqa
+from saga_tools.slurm_run_python import SlurmPythonRunner
 
+from Pegasus.api import Job
+from Pegasus.DAX3 import Namespace, Profile
 from typing_extensions import Protocol
 
 
@@ -53,11 +56,15 @@ class ResourceRequest(Protocol):
     partition: str
 
     @abstractmethod
-    def apply_to_job(self, job: Job) -> None:
+    def apply_to_job(self, job: Job, log_base_directory: Path) -> None:
         """
         Applies the appropriate settings to *job*
         to account for the requested resources.
         """
+
+
+SLURM_RESOURCE_STRING = """--{qos_or_account} --partition {partition} --ntasks 1
+ --cpus-per-task {num_cpus} --gpus-per-task {num_gpus} --job-name {job_name} --mem {mem_str}"""
 
 
 @attrs(frozen=True, slots=True)
@@ -71,19 +78,43 @@ class SlurmResourceRequest(ResourceRequest):
     num_cpus: int = attrib(validator=in_(Range.at_least(1)), default=1, kw_only=True)
     num_gpus: int = attrib(validator=in_(Range.at_least(0)), default=0, kw_only=True)
 
-    def apply_to_job(self, job: Job) -> None:
-        raise NotImplementedError()
+    def apply_to_job(  # pylint: disable=arguments-differ
+        self, job: Job, log_base_directory: Path, *, job_name: str = ""
+    ) -> None:
+        qos_or_account = (
+            f"qos {self.partition}"
+            if self.partition in ("scavenge", "ephemeral")
+            else f"account {self.partition}"
+        )
+        slurm_resource_content = SLURM_RESOURCE_STRING.format(
+            qos_or_account=qos_or_account,
+            partition=self.partition,
+            num_cpus=self.num_cpus,
+            num_gpus=self.num_gpus,
+            job_name=job_name,
+            mem_str=SlurmPythonRunner.to_slurm_memory_string(self.memory),
+        )
+        job.add_profiles(
+            Profile(Namespace.PEGASUS, "glite.arguments", slurm_resource_content)
+        )
 
 
 @attrs(frozen=True, slots=True)
 class WorkflowBuilder:
+    """
+    A class which constructs a representation of a Pegasus workflow use `execute(workflow)` to build the workflow
+    """
+
+    name: str = attrib(validator=instance_of(str), kw_only=True)
+    created_by: str = attrib(validator=instance_of(str), kw_only=True)
+
     def schedule_job(self, job: Job, resource_request: ResourceRequest) -> DependencyNode:
         raise NotImplementedError()
 
 
 def execute(workflow: WorkflowBuilder):
     # build DAG, call writeXml
-    # should we execute appropriate commands to submit or prefer the user to do it themselves?
+    # We will let the user submit themselves, however we could provide them the submit command if known
     raise NotImplementedError()
 
 
