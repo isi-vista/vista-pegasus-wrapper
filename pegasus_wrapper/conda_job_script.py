@@ -7,8 +7,6 @@ from attr import attrs
 from vistautils.parameters import Parameters
 from vistautils.parameters_only_entrypoint import parameters_only_entry_point
 
-import temppathlib
-
 from saga_tools.conda import CondaConfiguration
 from saga_tools.spack import SpackConfiguration
 
@@ -22,7 +20,6 @@ def main(params: Parameters):
         conda_script_path=params.creatable_file("conda_script_path"),
         working_directory=params.optional_creatable_directory("working_directory")
         or Path(os.getcwd()),
-        job_name=params.string("job_name", default=entry_point),
         echo_template=params.boolean("echo_template", default=False),
     )
 
@@ -30,11 +27,11 @@ def main(params: Parameters):
 @attrs(frozen=True, slots=True)
 class CondaJobScriptGenerator:
     """
-    A driver to create a shell script in order to run a python program in a conda virtual environment.
+    Driver to create a shell script in order to run a python program in a conda virtual environment
 
-    The program takes a parameters file as input to generate the executable script. The script can be
-    used as an executable job for Pegasus so that a job can be run in a venv as the default pegasus
-    jobs do not run in one.
+    The program takes a parameters file as input to generate the executable script. The script can
+    be used as an executable job for Pegasus so that a job can be run in a venv as the default
+    pegasus jobs do not run in one.
 
     The generated script is based on
     https://github.com/isi-vista/saga-tools/blob/master/saga_tools/slurm_run_python.py
@@ -48,7 +45,7 @@ class CondaJobScriptGenerator:
         environment to run in
     * *spack_environment*: (optional): the spack environment, if any, to run in.
         Cannot appear with *spack_packages*.
-    * *spack_packages*: (optional): a YAML list of Spack packages to load (in *module@version* format).
+    * *spack_packages* (optional): a YAML list of Spack packages to load(in *module@version* format)
     * *spack_root*: the spack installation to use (necessary only if *spack_environment*
         or *spack_modules*) is specified. This is usually the path to a working
         copy of a spack repository.
@@ -61,6 +58,7 @@ class CondaJobScriptGenerator:
     * *echo_template* (optional boolean, default False): whether to echo the generated
         job script (for debugging).
     """
+
     conda_config: Optional[CondaConfiguration]
     spack_config: Optional[SpackConfiguration]
 
@@ -78,12 +76,8 @@ class CondaJobScriptGenerator:
         conda_script_path: Path,
         *,
         working_directory: Path,
-        job_name: str,
         echo_template: bool = False,
     ):
-        with temppathlib.TmpDirIfNecessary(path=conda_script_path) as tmp_dir:
-            if not conda_script_path:
-                conda_script_path = tmp_dir.path / f"{job_name}.sbatch"
 
         conda_script_content = CONDA_SCRIPT.format(
             conda_lines=self.conda_config.sbatch_lines(),
