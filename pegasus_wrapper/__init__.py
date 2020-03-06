@@ -17,24 +17,23 @@ Terminology
 # pylint:disable=missing-docstring
 from abc import abstractmethod
 from pathlib import Path
-from typing import Dict, Iterable, Optional
+from typing import Iterable, Optional
 
-from attr import attrib, attrs, Factory
-from attr.validators import in_, instance_of
+from attr import attrib, attrs
+from attr.validators import instance_of
 
 from immutablecollections import ImmutableSet, immutableset
 from vistautils.memory_amount import MemoryAmount
-from vistautils.range import Range
 
 from pegasus_wrapper.version import version as __version__  # noqa
 
-from Pegasus.api import Job, File
-from Pegasus.DAX3 import Namespace, Profile
+from networkx import DiGraph
+from Pegasus.api import OS, Arch, File, Job
+from Pegasus.DAX3 import ADAG, PFN, Executable, Link
 from typing_extensions import Protocol
 
-from saga_tools.slurm import to_slurm_memory_string
 
-
+@attrs(slots=True)
 class DependencyNode:
     """
     An abstract object tied to a computation
@@ -43,11 +42,14 @@ class DependencyNode:
     depends on the output of another computation.
     """
 
+    job: Job = attrib(validator=instance_of(Job), kw_only=True)
+
 
 class Artifact(Protocol):
     """
     An `Artifact` is the result of any computation.
     """
+
     computed_by: ImmutableSet[DependencyNode]
 
 
@@ -65,88 +67,162 @@ class ResourceRequest(Protocol):
     partition: str
 
     @abstractmethod
-    def apply_to_job(self, job: Job, log_base_directory: Path, job_name: Optional[str] = "") -> None:
+    def apply_to_job(
+        self, job: Job, log_base_directory: Path, job_name: Optional[str] = ""
+    ) -> None:
         """
         Applies the appropriate settings to *job*
         to account for the requested resources.
         """
 
 
-SLURM_RESOURCE_STRING = """--{qos_or_account} --partition {partition} --ntasks 1
- --cpus-per-task {num_cpus} --gpus-per-task {num_gpus} --job-name {job_name} --mem {mem_str}
- --output={stdout_log_path}"""
-
-
-@attrs(frozen=True, slots=True)
-class SlurmResourceRequest(ResourceRequest):
+def script_to_pegasus_executable(
+    path: Path,
+    name: Optional[str] = None,
+    *,
+    site: str = "local",
+    namespace: Optional[str] = None,
+    version: Optional[str] = None,
+    arch: Optional[Arch] = None,
+    os: Optional[OS] = None,
+    osrelease: Optional[str] = None,
+    osversion: Optional[str] = None,
+    glibc: Optional[str] = None,
+    installed: Optional[bool] = None,
+    container: Optional[str] = None
+) -> Executable:
     """
-    A `ResourceRequest` for a job running on a SLURM cluster.
+    Turns a script path into a pegasus Executable
+
+    Arguments:
+        *name*: Logical name of executable
+        *namespace*: Executable namespace
+        *version*: Executable version
+        *arch*: Architecture that this exe was compiled for
+        *os*: Name of os that this exe was compiled for
+        *osrelease*: Release of os that this exe was compiled for
+        *osversion*: Version of os that this exe was compiled for
+        *glibc*: Version of glibc this exe was compiled against
+        *installed*: Is the executable installed (true), or stageable (false)
+        *container*: Optional attribute to specify the container to use
     """
 
-    memory: MemoryAmount = attrib(validator=instance_of(MemoryAmount), kw_only=True)
-    partition: str = attrib(validator=instance_of(str), kw_only=True)
-    num_cpus: int = attrib(validator=in_(Range.at_least(1)), default=1, kw_only=True)
-    num_gpus: int = attrib(validator=in_(Range.at_least(0)), default=0, kw_only=True)
+    rtrnr = Executable(
+        path.stem + path.suffix if name is None else name,
+        namespace=namespace,
+        version=version,
+        arch=arch,
+        os=os,
+        osrelease=osrelease,
+        osversion=osversion,
+        glibc=glibc,
+        installed=installed,
+        container=container,
+    )
+    rtrnr.addPFN(_path_to_pfn(path, site=site))
+    return rtrnr
 
-    def apply_to_job(
-        self, job: Job, log_base_directory: Path, job_name: str = "SlurmResourceJob"
-    ) -> None:
-        qos_or_account = (
-            f"qos {self.partition}"
-            if self.partition in ("scavenge", "ephemeral")
-            else f"account {self.partition}"
-        )
-        job_name += ".log"
-        slurm_resource_content = SLURM_RESOURCE_STRING.format(
-            qos_or_account=qos_or_account,
-            partition=self.partition,
-            num_cpus=self.num_cpus,
-            num_gpus=self.num_gpus,
-            job_name=job_name,
-            mem_str=to_slurm_memory_string(self.memory),
-            stdout_log_path=log_base_directory / job_name
-        )
-        job.add_profiles(
-            Profile(Namespace.PEGASUS, "glite.arguments", slurm_resource_content)
-        )
+
+def pegasus_executable_to_pegasus_job(
+    executable: Executable,
+    inputs: Iterable[File] = immutableset(),
+    outputs: Iterable[File] = immutableset(),
+) -> Job:
+    rtrnr = Job(executable)
+
+    for file in inputs:
+        rtrnr.uses(file, link=Link.INPUT)
+
+    for file in outputs:
+        rtrnr.uses(file, link=Link.OUTPUT, transfer=True)
+
+    return rtrnr
+
+
+def path_to_pegaus_file(
+    path: Path, *, site: str = "local", name: Optional[str] = None
+) -> File:
+    """
+    Given a *path* object return a pegasus `File` for usage in a workflow
+
+    If the resource is not on a local machine provide the *site* string.
+
+    Files can be used for either an input or output of a Job.
+    """
+    rtnr = File(path.stem + path.suffix if name is None else name)
+    rtnr.addPFN(_path_to_pfn(path, site))
+    return rtnr
+
+
+def _path_to_pfn(path: Path, site: str = "local") -> PFN:
+    return PFN(path.absolute(), site=site)
 
 
 @attrs(frozen=True, slots=True)
 class WorkflowBuilder:
     """
-    A class which constructs a representation of a Pegasus workflow use `execute(workflow)` to build the workflow
+    A class which wraps a representation of a Pegasus workflow
+
+    Run `execute(workflow)` to write out the workflow into DAX files for submission
     """
+
     name: str = attrib(validator=instance_of(str), kw_only=True)
     created_by: str = attrib(validator=instance_of(str), kw_only=True)
     log_base_directory: Path = attrib(validator=instance_of(Path), kw_only=True)
-    files_to_created_by_jobs: Dict[File, ImmutableSet[Job]] = attrib(kw_only=True, init=False, default=Factory(dict))
+    _graph: DiGraph = attrib(
+        validator=instance_of(DiGraph), kw_only=True, default=DiGraph()
+    )
 
-    def schedule_job(self, job: Job, resource_request: ResourceRequest, *, job_name: Optional[str] = None) -> DependencyNode:
+    def schedule_job(self, job: Job, resource_request: ResourceRequest) -> DependencyNode:
         """
-        The provided Pegasus Job is expected to already have it's input files and output files linked. We may want to
-        wrap building a pegasus job somehow?
-
-        Ryan can you explain why you wanted to return a dependency node here? I'm not sure how that's helpful...
+        Schedule a `Job` for computation during the workflow.
         """
-        resource_request.apply_to_job(job, self.log_base_directory, job_name=job_name if job_name is not None else None)
 
-        parent_jobs = self._calculate_dependencies(job.get_inputs())
+        resource_request.apply_to_job(job, log_base_directory=self.log_base_directory)
+        self._graph.add_node(job)
+        self._add_files_to_graph(job, immutableset(job.get_inputs()), is_input=True)
+        self._add_files_to_graph(job, immutableset(job.get_outputs()), is_input=False)
 
-        for output_file in job.get_outputs():
-            self.files_to_created_by_jobs[output_file] = parent_jobs
+        return DependencyNode(job=job)
 
-    def _calculate_dependencies(self, files: Iterable[File]) -> ImmutableSet[Job]:
-        return immutableset(self.files_to_created_by_jobs[file] if file in self.files_to_created_by_jobs else None for file in files)
+    def _add_files_to_graph(
+        self, job: Job, files: Iterable[File], *, is_input: bool
+    ) -> None:
+        """
+        Add files to the internal digraph to be able to calculate dependent jobs
+        """
+        for file in files:
+            if file not in self._graph:
+                self._graph.add_node(file)
+
+            if is_input:
+                self._graph.add_edge(file, job, label=INPUT_FILE_LABEL)
+            else:
+                self._graph.add_edge(job, file, label=OUTPUT_FILE_LABEL)
+
+    def calculate_child_jobs(self, root: Job) -> None:
+        # Is asking the user to know their initial job a problem?
+        raise NotImplementedError()
 
     def build(self, output_xml_path: Path):
         """
         build DAG, call writeXml
         We will let the user submit themselves, however we could provide them the submit command if known
-
-        Currently I need to know the leaf jobs to work my way up the `files_to_created_by_jobs` dict however
-        I could also just build my own digraph dependency tree to convert into the DAX
-
-        Or we could just include a DAX in the internal state of the WorkflowBuilder which is added to as `schedule_job`
-        is called. Then this file just writes it out to a given location and maybe does sanity checking?
         """
+        diamond = ADAG(self.name)
+        diamond.metadata("name", self.name)
+        diamond.metadata("createdby", self.created_by)
+
+        # Do Files, Executables, Etc need to be added to a DAX or if we
+        # just add the job do those get automatically added?
+        # If we do need to add these the functions above which create
+        # Executables, files, etc will need to become part of this class so they
+
+        diamond.writeXML(output_xml_path)
+
         raise NotImplementedError()
+
+
+INPUT_FILE_LABEL = "input_file"
+OUTPUT_FILE_LABEL = "output_file"
+CHILD_JOB_LABEL = "child"
