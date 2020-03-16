@@ -17,19 +17,19 @@ Terminology
 # pylint:disable=missing-docstring
 from abc import abstractmethod
 from pathlib import Path
-from typing import Iterable, Optional, List
+from typing import Iterable, List, Optional
 
-from attr import attrib, attrs, Factory
+from attr import Factory, attrib, attrs
 from attr.validators import instance_of
 
 from immutablecollections import ImmutableSet, immutableset
 from vistautils.memory_amount import MemoryAmount
 
-from pegasus_wrapper.version import version as __version__  # noqa
-
 from networkx import DiGraph
 from Pegasus.api import OS, Arch, File, Job
 from Pegasus.DAX3 import ADAG, PFN, Executable, Link
+from pegasus_wrapper.version import version as __version__  # noqa
+
 from typing_extensions import Protocol
 
 
@@ -172,8 +172,12 @@ class WorkflowBuilder:
     _graph: DiGraph = attrib(
         validator=instance_of(DiGraph), kw_only=True, default=DiGraph()
     )
-    _jobs_in_graph: List[Job] = attrib(validator=instance_of(List), kw_only=True, default=Factory(List), init=False)
-    _files_in_graph: List[File] = attrib(validator=instance_of(List), kw_only=True, default=Factory(List), init=False)
+    _jobs_in_graph: List[Job] = attrib(
+        validator=instance_of(List), kw_only=True, default=Factory(List), init=False
+    )
+    _files_in_graph: List[File] = attrib(
+        validator=instance_of(List), kw_only=True, default=Factory(List), init=False
+    )
 
     def schedule_job(self, job: Job, resource_request: ResourceRequest) -> DependencyNode:
         """
