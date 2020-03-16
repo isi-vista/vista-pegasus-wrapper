@@ -17,9 +17,9 @@ Terminology
 # pylint:disable=missing-docstring
 from abc import abstractmethod
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Optional, List
 
-from attr import attrib, attrs
+from attr import attrib, attrs, Factory
 from attr.validators import instance_of
 
 from immutablecollections import ImmutableSet, immutableset
@@ -172,14 +172,17 @@ class WorkflowBuilder:
     _graph: DiGraph = attrib(
         validator=instance_of(DiGraph), kw_only=True, default=DiGraph()
     )
+    _jobs_in_graph: List[Job] = attrib(validator=instance_of(List), kw_only=True, default=Factory(List), init=False)
+    _files_in_graph: List[File] = attrib(validator=instance_of(List), kw_only=True, default=Factory(List), init=False)
 
     def schedule_job(self, job: Job, resource_request: ResourceRequest) -> DependencyNode:
         """
-        Schedule a `Job` for computation during the workflow.
+        Schedule a `Job` for computation during the workflow
         """
 
         resource_request.apply_to_job(job, log_base_directory=self.log_base_directory)
         self._graph.add_node(job)
+        self._jobs_in_graph.append(job)
         self._add_files_to_graph(job, immutableset(job.get_inputs()), is_input=True)
         self._add_files_to_graph(job, immutableset(job.get_outputs()), is_input=False)
 
@@ -194,11 +197,18 @@ class WorkflowBuilder:
         for file in files:
             if file not in self._graph:
                 self._graph.add_node(file)
+                self._files_in_graph.append(file)
 
             if is_input:
                 self._graph.add_edge(file, job, label=INPUT_FILE_LABEL)
             else:
                 self._graph.add_edge(job, file, label=OUTPUT_FILE_LABEL)
+
+    def get_jobs(self) -> ImmutableSet[Job]:
+        return immutableset(self._jobs_in_graph)
+
+    def get_files(self) -> ImmutableSet[File]:
+        return immutableset(self._files_in_graph)
 
     def calculate_child_jobs(self, root: Job) -> None:
         # Is asking the user to know their initial job a problem?
@@ -212,6 +222,12 @@ class WorkflowBuilder:
         diamond = ADAG(self.name)
         diamond.metadata("name", self.name)
         diamond.metadata("createdby", self.created_by)
+
+        for file in self._files_in_graph:
+            diamond.addFile(file)
+
+        for job in self._jobs_in_graph:
+            diamond.addJob(job)
 
         # Do Files, Executables, Etc need to be added to a DAX or if we
         # just add the job do those get automatically added?
