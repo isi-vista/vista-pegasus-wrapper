@@ -77,11 +77,18 @@ class CondaJobScriptGenerator:
 
     def generate_shell_script(
         self, entry_point_name: str, param_file: Path, *, working_directory: Path
-    ):
-
+    ) -> str:
+        if self.spack_config:
+            return CONDA_SCRIPT.format(
+                conda_lines=self.conda_config.sbatch_lines(),
+                spack_lines=self.spack_config.sbatch_lines(),
+                working_directory=working_directory,
+                entry_point=entry_point_name,
+                param_file=param_file,
+            )
         return CONDA_SCRIPT.format(
             conda_lines=self.conda_config.sbatch_lines(),
-            spack_lines=self.spack_config.sbatch_lines(),
+            spack_lines="",
             working_directory=working_directory,
             entry_point=entry_point_name,
             param_file=param_file,
