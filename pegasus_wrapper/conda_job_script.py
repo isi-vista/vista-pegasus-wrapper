@@ -81,7 +81,7 @@ class CondaJobScriptGenerator:
 
         return CONDA_SCRIPT.format(
             conda_lines=self.conda_config.sbatch_lines(),
-            spack_lines=self.spack_config.sbatch_lines(),
+            spack_lines=self.spack_config.sbatch_lines() if self.spack_config else "",
             working_directory=working_directory,
             entry_point=entry_point_name,
             param_file=param_file,
