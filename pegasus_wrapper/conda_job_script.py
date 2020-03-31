@@ -3,7 +3,7 @@ import stat
 from pathlib import Path
 from typing import Optional, Union
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 from attr.validators import instance_of, optional
 
 from vistautils.io_utils import CharSink
@@ -68,8 +68,12 @@ class CondaJobScriptGenerator:
     * *working_directory* (optional)
     """
 
-    conda_config: Optional[CondaConfiguration] = attrib(validator=optional(instance_of(CondaConfiguration)))
-    spack_config: Optional[SpackConfiguration] = attrib(validator=optional(instance_of(SpackConfiguration)))
+    conda_config: Optional[CondaConfiguration] = attrib(
+        validator=optional(instance_of(CondaConfiguration))
+    )
+    spack_config: Optional[SpackConfiguration] = attrib(
+        validator=optional(instance_of(SpackConfiguration))
+    )
 
     @staticmethod
     def from_parameters(params: Parameters) -> "CondaJobScriptGenerator":
@@ -90,27 +94,33 @@ class CondaJobScriptGenerator:
             param_file=param_file,
         )
 
-    def write_shell_script_to(self,
-                             entry_point_name: str,
-                              parameters: Union[Path, Parameters],
-                              *,
-
-                              working_directory: Path,
-                              script_path: Path) -> None:
+    def write_shell_script_to(
+        self,
+        entry_point_name: str,
+        parameters: Union[Path, Parameters],
+        *,
+        working_directory: Path,
+        script_path: Path,
+    ) -> None:
         if isinstance(parameters, Path):
             param_path = parameters
         elif isinstance(parameters, Parameters):
             param_path = script_path.with_suffix(script_path.suffix + ".params")
             YAMLParametersWriter().write(parameters, CharSink.to_file(param_path))
         else:
-            raise RuntimeError(f"Parameters must be either Parameters or path to a param file, "
-                               f"but got {parameters}")
+            raise RuntimeError(
+                f"Parameters must be either Parameters or path to a param file, "
+                f"but got {parameters}"
+            )
 
-        script_path.write_text(self.generate_shell_script(
-            entry_point_name=entry_point_name,
-            param_file=param_path,
-            working_directory=working_directory,
-        ), encoding="utf-8")
+        script_path.write_text(
+            self.generate_shell_script(
+                entry_point_name=entry_point_name,
+                param_file=param_path,
+                working_directory=working_directory,
+            ),
+            encoding="utf-8",
+        )
         # Mark the generated script as executable.
         script_path.chmod(script_path.stat().st_mode | stat.S_IEXEC)
 
