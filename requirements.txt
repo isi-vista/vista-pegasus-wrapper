@@ -1,4 +1,4 @@
-git+https://github.com/pegasus-isi/pegasus.git@master#egg=pegasus-wms&subdirectory=lib/pegasus/python
+git+https://github.com/pegasus-isi/pegasus.git@744450946557bc78da5839f5932a8bbf8fe08bcd#egg=pegasus-wms&subdirectory=lib/pegasus/python
 git+https://github.com/isi-vista/saga-tools.git@master#egg=saga-tools
 # core requirements
 attrs==19.2.0
