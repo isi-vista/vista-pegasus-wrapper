@@ -1,10 +1,13 @@
 import os
+import stat
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
-from attr import attrs
+from attr import attrs, attrib
+from attr.validators import instance_of, optional
 
-from vistautils.parameters import Parameters
+from vistautils.io_utils import CharSink
+from vistautils.parameters import Parameters, YAMLParametersWriter
 from vistautils.parameters_only_entrypoint import parameters_only_entry_point
 
 from saga_tools.conda import CondaConfiguration
@@ -65,8 +68,8 @@ class CondaJobScriptGenerator:
     * *working_directory* (optional)
     """
 
-    conda_config: Optional[CondaConfiguration]
-    spack_config: Optional[SpackConfiguration]
+    conda_config: Optional[CondaConfiguration] = attrib(validator=optional(instance_of(CondaConfiguration)))
+    spack_config: Optional[SpackConfiguration] = attrib(validator=optional(instance_of(SpackConfiguration)))
 
     @staticmethod
     def from_parameters(params: Parameters) -> "CondaJobScriptGenerator":
@@ -80,15 +83,42 @@ class CondaJobScriptGenerator:
     ):
 
         return CONDA_SCRIPT.format(
-            conda_lines=self.conda_config.sbatch_lines(),
+            conda_lines=self.conda_config.sbatch_lines() if self.conda_config else "",
             spack_lines=self.spack_config.sbatch_lines() if self.spack_config else "",
             working_directory=working_directory,
             entry_point=entry_point_name,
             param_file=param_file,
         )
 
+    def write_shell_script_to(self,
+                             entry_point_name: str,
+                              parameters: Union[Path, Parameters],
+                              *,
+
+                              working_directory: Path,
+                              script_path: Path) -> None:
+        if isinstance(parameters, Path):
+            param_path = parameters
+        elif isinstance(parameters, Parameters):
+            param_path = script_path.with_suffix(script_path.suffix + ".params")
+            YAMLParametersWriter().write(parameters, CharSink.to_file(param_path))
+        else:
+            raise RuntimeError(f"Parameters must be either Parameters or path to a param file, "
+                               f"but got {parameters}")
+
+        script_path.write_text(self.generate_shell_script(
+            entry_point_name=entry_point_name,
+            param_file=param_path,
+            working_directory=working_directory,
+        ), encoding="utf-8")
+        # Mark the generated script as executable.
+        script_path.chmod(script_path.stat().st_mode | stat.S_IEXEC)
+
 
 CONDA_SCRIPT = """#!/usr/bin/env bash
+
+set -e
+
 # This is needed because SLURM jobs are run from a non-interactive shell,
 # but conda expects PS1 (the prompt variable) to be set.
 if [[ -z ${{PS1+x}} ]]
@@ -98,6 +128,7 @@ fi
 {conda_lines}
 {spack_lines}
 cd {working_directory}
+echo `which python`
 python -m {entry_point} {param_file}
 """
 
