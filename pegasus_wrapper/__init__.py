@@ -17,23 +17,21 @@ Terminology
 # pylint:disable=missing-docstring
 from abc import abstractmethod
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Dict, Iterable, List, Optional
 
-from attr import attrib, attrs
+from attr import Factory, attrib, attrs
 from attr.validators import instance_of
 
 from immutablecollections import ImmutableSet, immutableset
-
-from pegasus_wrapper.pegasus_utils import path_to_pfn
 from vistautils.memory_amount import MemoryAmount
+from vistautils.parameters import Parameters
 
-from Pegasus.api import OS, Arch
-from Pegasus.DAX3 import ADAG, Executable, Link
-from Pegasus.api import File, Job
-from Pegasus.DAX3 import Namespace, Profile
+from pegasus_wrapper.pegasus_utils import build_submit_script, path_to_pfn
 from pegasus_wrapper.version import version as __version__  # noqa
-from saga_tools.slurm import to_slurm_memory_string
 
+from networkx import DiGraph
+from Pegasus.api import File, Job
+from Pegasus.DAX3 import ADAG, Executable, Link
 from typing_extensions import Protocol
 
 
@@ -80,135 +78,137 @@ class ResourceRequest(Protocol):
         """
 
 
-def script_to_pegasus_executable(
-    path: Path,
-    name: Optional[str] = None,
-    *,
-    site: str = "local",
-    namespace: Optional[str] = None,
-    version: Optional[str] = None,
-    arch: Optional[Arch] = None,
-    os: Optional[OS] = None,
-    osrelease: Optional[str] = None,
-    osversion: Optional[str] = None,
-    glibc: Optional[str] = None,
-    installed: Optional[bool] = None,
-    container: Optional[str] = None
-) -> Executable:
+@attrs(frozen=True, slots=True)
+class WorkflowBuilder:
     """
-    Turns a script path into a pegasus Executable
+    A class which wraps a representation of a Pegasus workflow
 
-    Arguments:
-        *name*: Logical name of executable
-        *namespace*: Executable namespace
-        *version*: Executable version
-        *arch*: Architecture that this exe was compiled for
-        *os*: Name of os that this exe was compiled for
-        *osrelease*: Release of os that this exe was compiled for
-        *osversion*: Version of os that this exe was compiled for
-        *glibc*: Version of glibc this exe was compiled against
-        *installed*: Is the executable installed (true), or stageable (false)
-        *container*: Optional attribute to specify the container to use
+    Run `build(workflow)` to write out the workflow into DAX files for submission
     """
 
-    rtrnr = Executable(
-        path.stem + path.suffix if name is None else name,
-        namespace=namespace,
-        version=version,
-        arch=arch,
-        os=os,
-        osrelease=osrelease,
-        osversion=osversion,
-        glibc=glibc,
-        installed=installed,
-        container=container,
+    name: str = attrib(validator=instance_of(str), kw_only=True)
+    created_by: str = attrib(validator=instance_of(str), kw_only=True)
+    log_base_directory: Path = attrib(validator=instance_of(Path), kw_only=True)
+    _workflow_directory: Path = attrib(validator=instance_of(Path), kw_only=True)
+    _graph: DiGraph = attrib(
+        validator=instance_of(DiGraph), kw_only=True, default=DiGraph()
     )
-    rtrnr.addPFN(path_to_pfn(path, site=site))
-    return rtrnr
+    _job_to_executable: Dict[Job, Executable] = attrib(
+        validator=instance_of(Dict), kw_only=True, default=Factory(Dict), init=False
+    )
+    _jobs_in_graph: List[Job] = attrib(
+        validator=instance_of(List), kw_only=True, default=Factory(List), init=False
+    )
+    _files_in_graph: List[File] = attrib(
+        validator=instance_of(List), kw_only=True, default=Factory(List), init=False
+    )
 
+    @staticmethod
+    def from_params(params: Parameters) -> "WorkflowBuilder":
+        return WorkflowBuilder(
+            name=params.string("workflow_name", default="Workflow"),
+            created_by=params.string("workflow_created", default="Default Constructor"),
+            log_base_directory=params.creatable_directory("workflow_log_dir"),
+            workflow_directory=params.creatable_directory("workflow_dir"),
+        )
 
-def pegasus_executable_to_pegasus_job(
-    executable: Executable,
-    inputs: Iterable[File] = immutableset(),
-    outputs: Iterable[File] = immutableset(),
-) -> Job:
-    rtrnr = Job(executable)
+    def pegasus_executable_to_pegasus_job(
+        self,
+        executable: Executable,
+        inputs: Iterable[File] = immutableset(),
+        outputs: Iterable[File] = immutableset(),
+    ) -> Job:
+        rtrnr = Job(executable)
+        self._job_to_executable[rtrnr] = executable
 
-    for file in inputs:
-        rtrnr.uses(file, link=Link.INPUT)
+        for file in inputs:
+            rtrnr.uses(file, link=Link.INPUT)
 
-    for file in outputs:
-        rtrnr.uses(file, link=Link.OUTPUT, transfer=True)
+        for file in outputs:
+            rtrnr.uses(file, link=Link.OUTPUT, transfer=True)
 
-    return rtrnr
+        return rtrnr
 
+    def schedule_job(self, job: Job, resource_request: ResourceRequest) -> DependencyNode:
+        """
+        Schedule a `Job` for computation during the workflow
+        """
 
+        resource_request.apply_to_job(job, log_base_directory=self.log_base_directory)
 
-# @attrs(frozen=True, slots=True)
-# class WorkflowBuilder:
-#     """
-#     A class which wraps a representation of a Pegasus workflow
-#
-#     Run `execute(workflow)` to write out the workflow into DAX files for submission
-#     """
-#
-#     name: str = attrib(validator=instance_of(str), kw_only=True)
-#     created_by: str = attrib(validator=instance_of(str), kw_only=True)
-#     log_base_directory: Path = attrib(validator=instance_of(Path), kw_only=True)
-#     _graph: DiGraph = attrib(
-#         validator=instance_of(DiGraph), kw_only=True, default=DiGraph()
-#     )
-#
-#     def schedule_job(self, job: Job, resource_request: ResourceRequest) -> DependencyNode:
-#         """
-#         Schedule a `Job` for computation during the workflow
-#         """
-#
-#         resource_request.apply_to_job(job, log_base_directory=self.log_base_directory)
-#         self._graph.add_node(job)
-#         self._jobs_in_graph.append(job)
-#         self._add_files_to_graph(job, immutableset(job.get_inputs()), is_input=True)
-#         self._add_files_to_graph(job, immutableset(job.get_outputs()), is_input=False)
-#
-#         return DependencyNode(job=job)
-#
-#     def _add_files_to_graph(
-#         self, job: Job, files: Iterable[File], *, is_input: bool
-#     ) -> None:
-#         """
-#         Add files to the internal digraph to be able to calculate dependent jobs
-#         """
-#         resource_request.apply_to_job(
-#             job,
-#             self.log_base_directory,
-#             job_name=job_name if job_name is not None else None,
-#         )
-#
-#     def build(self, output_xml_path: Path):
-#         """
-#         build DAG, call writeXml
-#         We will let the user submit themselves, however we could provide them the submit command if known
-#         """
-#         diamond = ADAG(self.name)
-#         diamond.metadata("name", self.name)
-#         diamond.metadata("createdby", self.created_by)
-#
-#         for file in self._files_in_graph:
-#             diamond.addFile(file)
-#
-#         for job in self._jobs_in_graph:
-#             diamond.addJob(job)
-#
-#         # Do Files, Executables, Etc need to be added to a DAX or if we
-#         # just add the job do those get automatically added?
-#         # If we do need to add these the functions above which create
-#         # Executables, files, etc will need to become part of this class so they
-#
-#         diamond.writeXML(output_xml_path)
-#
-#         raise NotImplementedError()
+        self._graph.add_node(job)
+        self._jobs_in_graph.append(job)
+        self._add_files_to_graph(job, immutableset(job.get_inputs()), is_input=True)
+        self._add_files_to_graph(job, immutableset(job.get_outputs()), is_input=False)
+
+        return DependencyNode(job=job)
+
+    def _add_files_to_graph(
+        self, job: Job, files: Iterable[File], *, is_input: bool
+    ) -> None:
+        for file in files:
+            if file not in self._graph:
+                self._graph.add_node(file)
+                self._files_in_graph.append(file)
+
+            if is_input:
+                self._graph.add_edge(file, job, label=INPUT_FILE_LABEL)
+            else:
+                self._graph.add_edge(job, file, label=OUTPUT_FILE_LABEL)
+
+    def build(self, output_xml_dir: Path) -> None:
+        """
+        build DAG, call writeXml
+        We will let the user submit themselves, however we could provide them the submit command if known
+        """
+        diamond = ADAG(self.name)
+        diamond.metadata("name", self.name)
+        diamond.metadata("createdby", self.created_by)
+
+        for file in self._files_in_graph:
+            diamond.addFile(file)
+
+        for job in self._jobs_in_graph:
+            diamond.addJob(job)
+            diamond.addExecutable(self._job_to_executable[job])
+
+        # TODO: Build the dependencies from the graph files inputs and outputs of jobs
+
+        dax_file_name = f"{self.name}.dax"
+        dax_file = output_xml_dir / dax_file_name
+        with dax_file.open("w") as dax:
+            diamond.writeXML(dax)
+        build_submit_script(
+            output_xml_dir / "submit.sh", dax_file_name, self._workflow_directory
+        )
+
+    def get_job_inputs(self, job: Job) -> ImmutableSet[File]:
+        return immutableset(
+            adj_node
+            for adj_node in self._graph.predecessors(job)
+            if self._graph.get_edge_data(adj_node, job) == INPUT_FILE_LABEL
+        )
+
+    def get_job_outputs(self, job: Job) -> ImmutableSet[File]:
+        return immutableset(
+            adj_node
+            for adj_node in self._graph.successors(job)
+            if self._graph.get_edge_data(adj_node, job) == OUTPUT_FILE_LABEL
+        )
+
+    def get_job_executable(self, job: Job) -> Executable:
+        return self._job_to_executable[job]
+
+    def get_jobs(self) -> ImmutableSet[Job]:
+        return immutableset(self._jobs_in_graph)
+
+    def get_files(self) -> ImmutableSet[File]:
+        return immutableset(self._files_in_graph)
+
+    def get_executables(self) -> ImmutableSet[Executable]:
+        return immutableset(self._job_to_executable.values())
 
 
 INPUT_FILE_LABEL = "input_file"
 OUTPUT_FILE_LABEL = "output_file"
-CHILD_JOB_LABEL = "child"
+CHILD_JOB_LABEL = "child_job"
