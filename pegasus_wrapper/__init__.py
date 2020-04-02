@@ -94,13 +94,13 @@ class WorkflowBuilder:
         validator=instance_of(DiGraph), kw_only=True, default=DiGraph()
     )
     _job_to_executable: Dict[Job, Executable] = attrib(
-        validator=instance_of(Dict), kw_only=True, default=Factory(Dict), init=False
+        validator=instance_of(Dict), kw_only=True, default=Factory(dict), init=False
     )
     _jobs_in_graph: List[Job] = attrib(
-        validator=instance_of(List), kw_only=True, default=Factory(List), init=False
+        validator=instance_of(List), kw_only=True, default=Factory(list), init=False
     )
     _files_in_graph: List[File] = attrib(
-        validator=instance_of(List), kw_only=True, default=Factory(List), init=False
+        validator=instance_of(List), kw_only=True, default=Factory(list), init=False
     )
 
     @staticmethod
