@@ -154,7 +154,10 @@ class WorkflowBuilder:
             if is_input:
                 self._graph.add_edge(file, job, label=INPUT_FILE_LABEL)
                 for pred in self._graph.predecessors(file):
-                    if self._graph.get_edge_data(pred, file)["label"] == OUTPUT_FILE_LABEL:
+                    if (
+                        self._graph.get_edge_data(pred, file)["label"]
+                        == OUTPUT_FILE_LABEL
+                    ):
                         self._graph.add_edge(job, pred, label=DEPENDENT_JOB_LABEL)
             else:
                 self._graph.add_edge(job, file, label=OUTPUT_FILE_LABEL)
@@ -178,7 +181,10 @@ class WorkflowBuilder:
             diamond.addExecutable(self._job_to_executable[job])
             diamond.addJob(job)
             for successor in self._graph.successors(job):
-                if self._graph.get_edge_data(job, successor)["label"] == DEPENDENT_JOB_LABEL:
+                if (
+                    self._graph.get_edge_data(job, successor)["label"]
+                    == DEPENDENT_JOB_LABEL
+                ):
                     diamond.depends(successor, job)
 
         dax_file_name = f"{self.name}.dax"
