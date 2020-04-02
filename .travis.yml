@@ -5,6 +5,12 @@ python:
 cache:
     pip: true
 
+before_install:
+    - wget -O - http://download.pegasus.isi.edu/pegasus/gpg.txt | sudo apt-key add -
+    - echo 'deb [arch=amd64] http://download.pegasus.isi.edu/pegasus/ubuntu xenial main' | sudo tee /etc/apt/sources.list.d/pegasus.list
+    - sudo apt-get update
+    - sudo apt-get install pegasus
+
 install:
     - pip install -r requirements.txt
     - pip install codecov
