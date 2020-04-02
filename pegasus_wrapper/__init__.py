@@ -153,8 +153,14 @@ class WorkflowBuilder:
 
             if is_input:
                 self._graph.add_edge(file, job, label=INPUT_FILE_LABEL)
+                for pred in self._graph.predecessors(file):
+                    if self._graph.get_edge_data(pred, file)["label"] == OUTPUT_FILE_LABEL:
+                        self._graph.add_edge(job, pred, label=DEPENDENT_JOB_LABEL)
             else:
                 self._graph.add_edge(job, file, label=OUTPUT_FILE_LABEL)
+                for suc in self._graph.successors(file):
+                    if self._graph.get_edge_data(file, suc)["label"] == INPUT_FILE_LABEL:
+                        self._graph.add_edge(suc, job, label=DEPENDENT_JOB_LABEL)
 
     def build(self, output_xml_dir: Path) -> None:
         """
@@ -169,10 +175,11 @@ class WorkflowBuilder:
             diamond.addFile(file)
 
         for job in self._jobs_in_graph:
-            diamond.addJob(job)
             diamond.addExecutable(self._job_to_executable[job])
-
-        # TODO: Build the dependencies from the graph files inputs and outputs of jobs
+            diamond.addJob(job)
+            for successor in self._graph.successors(job):
+                if self._graph.get_edge_data(job, successor)["label"] == DEPENDENT_JOB_LABEL:
+                    diamond.depends(successor, job)
 
         dax_file_name = f"{self.name}.dax"
         dax_file = output_xml_dir / dax_file_name
@@ -212,3 +219,4 @@ class WorkflowBuilder:
 INPUT_FILE_LABEL = "input_file"
 OUTPUT_FILE_LABEL = "output_file"
 CHILD_JOB_LABEL = "child_job"
+DEPENDENT_JOB_LABEL = "dependent_job"
