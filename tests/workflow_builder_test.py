@@ -10,6 +10,8 @@ def test_simple_dax(tmp_path):
             "workflow_created": "Testing",
             "workflow_log_dir": str(tmp_path / "log"),
             "workflow_dir": str(tmp_path / "working/"),
+            "site": "saga",
+            "namespace": "test"
         }
     )
     workflow_builder = WorkflowBuilder.from_params(params)
