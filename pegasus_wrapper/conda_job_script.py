@@ -101,12 +101,20 @@ class CondaJobScriptGenerator:
         *,
         working_directory: Path,
         script_path: Path,
+        params_path: Optional[Path],
     ) -> None:
         if isinstance(parameters, Path):
-            param_path = parameters
+            if params_path:
+                raise RuntimeError(
+                    "Cannot specify params_path and provide a path for parameters"
+                )
+            params_path = parameters
         elif isinstance(parameters, Parameters):
-            param_path = script_path.with_suffix(script_path.suffix + ".params")
-            YAMLParametersWriter().write(parameters, CharSink.to_file(param_path))
+            if not params_path:
+                raise RuntimeError(
+                    "Params path must be specified when providing a parameters object"
+                )
+            YAMLParametersWriter().write(parameters, CharSink.to_file(params_path))
         else:
             raise RuntimeError(
                 f"Parameters must be either Parameters or path to a param file, "
@@ -116,7 +124,7 @@ class CondaJobScriptGenerator:
         script_path.write_text(
             self.generate_shell_script(
                 entry_point_name=entry_point_name,
-                param_file=param_path,
+                param_file=params_path,
                 working_directory=working_directory,
             ),
             encoding="utf-8",

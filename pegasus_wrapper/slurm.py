@@ -6,11 +6,10 @@ from attr.validators import in_, instance_of
 from vistautils.memory_amount import MemoryAmount
 from vistautils.range import Range
 
-from pegasus_wrapper import ResourceRequest
-from saga_tools.slurm import to_slurm_memory_string
-
 from Pegasus.api import Job
 from Pegasus.DAX3 import Namespace, Profile
+from pegasus_wrapper import ResourceRequest
+from saga_tools.slurm import to_slurm_memory_string
 
 SLURM_RESOURCE_STRING = """--{qos_or_account} --partition {partition} --ntasks 1
  --cpus-per-task {num_cpus} --gpus-per-task {num_gpus} --job-name {job_name} --mem {mem_str}
