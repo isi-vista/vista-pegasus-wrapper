@@ -18,25 +18,30 @@ Terminology
 import logging
 from abc import abstractmethod
 from itertools import chain
-from pathlib import Path, PurePath
-from typing import Any, Iterable, Optional, Tuple, TypeVar, Union, Generic
-from uuid import uuid4
+from pathlib import Path
+from typing import Any, Generic, Iterable, Optional, Tuple, TypeVar, Union
 
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
 
 from immutablecollections import ImmutableSet, immutableset
-from immutablecollections.converter_utils import _to_immutableset, _to_tuple
 from vistautils.class_utils import fully_qualified_name
 from vistautils.memory_amount import MemoryAmount
 from vistautils.parameters import Parameters
 
 from Pegasus.DAX3 import ADAG, Executable, Job
+from pegasus_wrapper import resources
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
 from pegasus_wrapper.pegasus_utils import build_submit_script, path_to_pfn
 from pegasus_wrapper.version import version as __version__  # noqa
 
 from typing_extensions import Protocol
+
+try:
+    import importlib.resources as pkg_resources
+except ImportError:
+    # Try backported to PY<37 `importlib_resources`.
+    import importlib_resources as pkg_resources
 
 
 @attrs(slots=True, eq=False)
@@ -95,18 +100,33 @@ class Artifact(Protocol):
     locator: Optional[Locator]
 
 
-_T = TypeVar("_T")
+# For use in AbstractArtifact to allow the user to pass either a single
+# DependencyNode or a collection to computed_by
+def _to_dependency_set(
+    item: Union[DependencyNode, Iterable[DependencyNode]]
+) -> ImmutableSet[DependencyNode]:
+    if isinstance(item, DependencyNode):
+        return immutableset([item])
+    else:
+        return immutableset(item)
 
 
-@attrs(frozen=True, slots=True)
-class ValueArtifact(Artifact, Generic[_T]):
-    value: _T = attrib()
+@attrs(frozen=True)
+class AbstractArtifact(Artifact):
     computed_by: ImmutableSet[DependencyNode] = attrib(
-        converter=_to_immutableset, kw_only=True
+        converter=_to_dependency_set, kw_only=True, default=immutableset()
     )
     locator: Optional[Locator] = attrib(
         validator=optional(instance_of(Locator)), kw_only=True
     )
+
+
+_T = TypeVar("_T")
+
+
+@attrs(frozen=True)
+class ValueArtifact(AbstractArtifact, Generic[_T]):
+    value: _T = attrib()
 
     @staticmethod
     def preexisting(
@@ -161,7 +181,6 @@ class WorkflowBuilder:
 
     name: str = attrib(validator=instance_of(str), kw_only=True)
     created_by: str = attrib(validator=instance_of(str), kw_only=True)
-    log_base_directory: Path = attrib(validator=instance_of(Path), kw_only=True)
     _workflow_directory: Path = attrib(validator=instance_of(Path), kw_only=True)
     _namespace: str = attrib(validator=instance_of(str), kw_only=True)
     _conda_script_generator: Optional[CondaJobScriptGenerator] = attrib(
@@ -191,8 +210,7 @@ class WorkflowBuilder:
         return WorkflowBuilder(
             name=params.string("workflow_name", default="Workflow"),
             created_by=params.string("workflow_created", default="Default Constructor"),
-            log_base_directory=params.creatable_directory("workflow_log_dir"),
-            workflow_directory=params.creatable_directory("workflow_dir"),
+            workflow_directory=params.creatable_directory("workflow_directory"),
             default_site=params.string("site"),
             conda_script_generator=CondaJobScriptGenerator.from_parameters(params),
             namespace=params.string("namespace"),
@@ -215,18 +233,23 @@ class WorkflowBuilder:
     #
     #     return rtrnr
 
-    def schedule_job(self, job: Job, resource_request: ResourceRequest) -> DependencyNode:
-        """
-        Schedule a `Job` for computation during the workflow
-        """
+    # def schedule_job(self, job: Job, resource_request: ResourceRequest) -> DependencyNode:
+    #     """
+    #     Schedule a `Job` for computation during the workflow
+    #     """
+    #
+    #     resource_request.apply_to_job(job, log_base_directory=self.log_base_directory)
+    #
+    #     self._job_graph.addJob(job)
+    #     self._add_files_to_graph(job, immutableset(job.get_inputs()), is_input=True)
+    #     self._add_files_to_graph(job, immutableset(job.get_outputs()), is_input=False)
+    #
+    #     return DependencyNode(job=job)
 
-        resource_request.apply_to_job(job, log_base_directory=self.log_base_directory)
-
-        self._job_graph.addJob(job)
-        self._add_files_to_graph(job, immutableset(job.get_inputs()), is_input=True)
-        self._add_files_to_graph(job, immutableset(job.get_outputs()), is_input=False)
-
-        return DependencyNode(job=job)
+    def directory_for(self, locator: Locator) -> Path:
+        ret = self._workflow_directory / str(locator)
+        ret.mkdir(parents=True, exist_ok=True)
+        return ret
 
     def run_python_on_parameters(
         self,
@@ -241,14 +264,14 @@ class WorkflowBuilder:
         else:
             fully_qualified_module_name = fully_qualified_name(python_module)
 
-        job_dir = self._workflow_directory / str(job_name)
-        script_path = job_dir / "run.sh"
+        job_dir = self.directory_for(job_name)
+        script_path = job_dir / "___run.sh"
         self._conda_script_generator.write_shell_script_to(
             entry_point_name=fully_qualified_module_name,
             parameters=parameters,
             working_directory=job_dir,
             script_path=script_path,
-            params_path=job_dir / "params.params",
+            params_path=job_dir / "____params.params",
         )
         script_executable = Executable(
             namespace=self._namespace,
@@ -317,7 +340,10 @@ class WorkflowBuilder:
     #         output_xml_dir / "submit.sh", dax_file_name, self._workflow_directory
     #     )
 
-    def write_dax_to_dir(self, output_xml_dir: Path) -> None:
+    def write_dax_to_dir(self, output_xml_dir: Optional[Path] = None) -> None:
+        if not output_xml_dir:
+            output_xml_dir = self._workflow_directory
+
         dax_file_name = f"{self.name}.dax"
         dax_file = output_xml_dir / dax_file_name
         logging.info("Writing DAX to %s", dax_file)
@@ -325,6 +351,17 @@ class WorkflowBuilder:
             self._job_graph.writeXML(dax)
         build_submit_script(
             output_xml_dir / "submit.sh", dax_file_name, self._workflow_directory
+        )
+
+        # We also need to write sites.xml and pegasus.conf
+        sites_xml_path = output_xml_dir / "sites.xml"
+        sites_xml_path.write_text(
+            pkg_resources.read_text(resources, "sites.xml"), encoding="utf-8"
+        )
+
+        pegasus_conf_path = output_xml_dir / "pegasus.conf"
+        pegasus_conf_path.write_text(
+            pkg_resources.read_text(resources, "pegasus.conf"), encoding="utf-8"
         )
 
     # def get_job_inputs(self, job: Job) -> ImmutableSet[File]:

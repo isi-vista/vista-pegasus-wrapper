@@ -20,7 +20,9 @@ setup(
     packages=['pegasus_wrapper'],
     # 3.6 and up, but not Python 4
     python_requires="~=3.6",
-    install_requires=[],
+    install_requires=[
+        "importlib-resources==1.4.0"
+    ],
     scripts=[],
     classifiers=[
         "Programming Language :: Python :: 3",
