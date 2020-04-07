@@ -19,7 +19,7 @@ import logging
 from abc import abstractmethod
 from itertools import chain
 from pathlib import Path, PurePath
-from typing import Any, Iterable, Optional, Tuple, TypeVar, Union
+from typing import Any, Iterable, Optional, Tuple, TypeVar, Union, Generic
 from uuid import uuid4
 
 from attr import attrib, attrs
@@ -99,7 +99,7 @@ _T = TypeVar("_T")
 
 
 @attrs(frozen=True, slots=True)
-class ValueArtifact(Artifact):
+class ValueArtifact(Artifact, Generic[_T]):
     value: _T = attrib()
     computed_by: ImmutableSet[DependencyNode] = attrib(
         converter=_to_immutableset, kw_only=True
