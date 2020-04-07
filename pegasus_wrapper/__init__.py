@@ -72,7 +72,9 @@ class Locator:
 
     def __truediv__(self, other: Union[str, "Locator"]):
         if isinstance(other, Locator):
-            return Locator(chain(self._parts, other._parts))
+            return Locator(
+                chain(self._parts, other._parts)  # pylint:disable=protected-access
+            )
         elif isinstance(other, str):
             new_parts = list(self._parts)
             new_parts.append(other)
