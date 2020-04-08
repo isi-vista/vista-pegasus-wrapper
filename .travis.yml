@@ -14,9 +14,6 @@ before_install:
     - sudo apt-get update
     - sudo apt-get install pegasus
     - sudo apt-get install htcondor
-    - systemctl start condor
-    - systemctl enable condor
-    - ps ax | grep condor
 
 install:
     - pip install -r requirements.txt
