@@ -8,8 +8,15 @@ cache:
 before_install:
     - wget -O - http://download.pegasus.isi.edu/pegasus/gpg.txt | sudo apt-key add -
     - echo 'deb [arch=amd64] http://download.pegasus.isi.edu/pegasus/ubuntu xenial main' | sudo tee /etc/apt/sources.list.d/pegasus.list
+    - wget -qO - https://research.cs.wisc.edu/htcondor/ubuntu/HTCondor-Release.gpg.key | sudo apt-key add -
+    - echo "deb http://research.cs.wisc.edu/htcondor/ubuntu/8.8/xenial xenial contrib" >> /etc/apt/sources.list
+    - echo "deb-src http://research.cs.wisc.edu/htcondor/ubuntu/8.8/xenial xenial contrib" >> /etc/apt/sources.list
     - sudo apt-get update
     - sudo apt-get install pegasus
+    - sudo apt-get install htcondor
+    - systemctl start condor
+    - systemctl enable condor
+    - ps ax | grep condor
 
 install:
     - pip install -r requirements.txt
