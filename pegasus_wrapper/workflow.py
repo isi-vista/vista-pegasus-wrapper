@@ -42,9 +42,13 @@ class DependencyNode:
 @attrs(frozen=True, slots=True)
 class WorkflowBuilder:
     """
-    A class which wraps a representation of a Pegasus workflow
+    A convenient way to build a Pegasus workflow.
 
-    Run `build(workflow)` to write out the workflow into DAX files for submission
+    Add jobs using *run_python_on_parameters*.
+    When you are done, call *write_dax_to_dir* to write the workflow DAX file,
+    sites file, and *slurm.conf* files to the given directory.
+
+    You can then execute them with *pegasus-plan* and *pegasus-run*.
     """
 
     name: str = attrib(validator=instance_of(str), kw_only=True)
@@ -119,6 +123,10 @@ class WorkflowBuilder:
     #     return DependencyNode(job=job)
 
     def directory_for(self, locator: Locator) -> Path:
+        """
+        Get the suggested working/output directory
+        for a job with the given `Locator`.
+        """
         ret = self._workflow_directory / str(locator)
         ret.mkdir(parents=True, exist_ok=True)
         return ret
@@ -135,6 +143,15 @@ class WorkflowBuilder:
         depends_on: Iterable[DependencyNode] = immutableset(),
         resource_request: Optional[ResourceRequest] = None,
     ) -> DependencyNode:
+        """
+        Schedule a job to run the given *python_module* on the given *parameters*.
+
+        If this job requires other jobs to be executed first,
+        include them in *depends_on*.
+
+        This method returns a `DependencyNode` which can be used in *depends_on*
+        for future jobs.
+        """
         if isinstance(python_module, str):
             fully_qualified_module_name = python_module
         else:

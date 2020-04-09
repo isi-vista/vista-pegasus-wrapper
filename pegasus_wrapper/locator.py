@@ -13,8 +13,17 @@ def _parse_parts(string_or_sequence: Union[str, Iterable[str]]) -> Tuple[str]:
 
 @attrs(slots=True, frozen=True, repr=False)
 class Locator:
-    """
-    fill me in
+    r"""
+    A `Locator` is provides a structured name to a workflow task.
+
+    These are used for assigning names to jobs in the underlying execution engine.
+
+    It is also used to generate the location of job log files
+    and often the working directories where jobs write their output.
+
+    `Locator`\ s have a sequential/hierarchical structure similar to a `Path`.
+    You can extend a `Locator` to create a new `Locator` using the */* operator,
+    just like `Path`.
     """
 
     _parts: Tuple[str] = attrib(converter=_parse_parts)

@@ -15,23 +15,23 @@ from typing_extensions import Protocol
 
 
 @attrs(frozen=True)
-class KeyValueZip(AbstractArtifact):
+class KeyValueStore(AbstractArtifact):
     path: Path = attrib(validator=instance_of(Path))
 
 
 class KeyValueTransform(Protocol):
     def __call__(
-        self, input_zip: KeyValueZip, *, workflow_builder: WorkflowBuilder
-    ) -> KeyValueZip:
+        self, input_zip: KeyValueStore, *, workflow_builder: WorkflowBuilder
+    ) -> KeyValueStore:
         """
         A function which adds jobs to *workflow_builder* to transform *input_zip*
         into another `KeyValueZip`.
         """
 
 
-def split_key_value_zip(
-    input_zip: KeyValueZip, *, num_parts: int, workflow_builder: WorkflowBuilder
-) -> Tuple[KeyValueZip]:
+def split_key_value_store(
+    input_zip: KeyValueStore, *, num_parts: int, workflow_builder: WorkflowBuilder
+) -> Tuple[KeyValueStore]:
     if num_parts <= 0:
         raise RuntimeError("Number of parts must be positive")
 
@@ -49,7 +49,7 @@ def split_key_value_zip(
         ),
     )
     return tuple(
-        KeyValueZip(
+        KeyValueStore(
             path=split_output_dir / f"{slice_index}.zip",
             computed_by=split_job,
             locator=split_locator / str(slice_index),
@@ -59,11 +59,11 @@ def split_key_value_zip(
 
 
 def join_to_key_value_zip(
-    key_value_zips_to_join: Iterable[KeyValueZip],
+    key_value_zips_to_join: Iterable[KeyValueStore],
     *,
     output_locator: Locator,
     workflow_builder: WorkflowBuilder,
-) -> KeyValueZip:
+) -> KeyValueStore:
     output_zip_path = workflow_builder.directory_for(output_locator) / "joined.zip"
     join_job = workflow_builder.run_python_on_parameters(
         output_locator,
@@ -75,21 +75,23 @@ def join_to_key_value_zip(
             }
         ),
     )
-    return KeyValueZip(path=output_zip_path, locator=output_locator, computed_by=join_job)
+    return KeyValueStore(
+        path=output_zip_path, locator=output_locator, computed_by=join_job
+    )
 
 
 def transform_key_value_store(
-    key_value_zip: KeyValueZip,
+    key_value_zip: KeyValueStore,
     transform: KeyValueTransform,
     *,
     output_locator: Locator,
     workflow_builder: WorkflowBuilder,
     parallelism: int,
-) -> KeyValueZip:
-    join_to_key_value_zip(
+) -> KeyValueStore:
+    return join_to_key_value_zip(
         [
             transform(split, workflow_builder=workflow_builder)
-            for split in split_key_value_zip(
+            for split in split_key_value_store(
                 key_value_zip, num_parts=parallelism, workflow_builder=workflow_builder
             )
         ],

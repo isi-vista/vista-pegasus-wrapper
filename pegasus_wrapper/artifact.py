@@ -12,8 +12,21 @@ from typing_extensions import Protocol
 
 
 class Artifact(Protocol):
-    """
+    r"""
     An `Artifact` is the result of any computation.
+
+    We know what jobs (represented by `DependencyNode`\ s it was *compute_by*
+    and it may have an optional associated `Locator`.
+
+    You can make your own sub-classes of `Artifact`
+    which provide additional information about a computation result
+    (see `AbstractArtifact`).
+
+    Note that because `Artifact`\ s are instantiated
+    before any computation actually happens,
+    all their fields must point to information known in advance.
+    For example, you can't include the actual content of a computation,
+    but you can include the path where you know the result will be written.
     """
 
     computed_by: ImmutableSet[DependencyNode]
@@ -31,6 +44,10 @@ def _to_dependency_set(
 
 @attrs(frozen=True)
 class AbstractArtifact(Artifact):
+    """
+    A convenient base class for custom `Artifact` implementations.
+    """
+
     computed_by: ImmutableSet[DependencyNode] = attrib(
         converter=_to_dependency_set, kw_only=True, default=immutableset()
     )
@@ -44,6 +61,10 @@ _T = TypeVar("_T")
 
 @attrs(frozen=True)
 class ValueArtifact(AbstractArtifact, Generic[_T]):
+    """
+    An artifact which wraps a single value.
+    """
+
     value: _T = attrib()
 
     @staticmethod
