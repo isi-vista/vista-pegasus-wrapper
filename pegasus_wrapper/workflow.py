@@ -65,7 +65,7 @@ class WorkflowBuilder:
         validator=instance_of(ResourceRequest), kw_only=True
     )
 
-    _job_graph = attrib(init=False)
+    _job_graph: ADAG = attrib(init=False)
 
     # _graph: DiGraph = attrib(
     #     validator=instance_of(DiGraph), kw_only=True, default=DiGraph()

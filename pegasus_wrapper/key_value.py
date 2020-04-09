@@ -5,7 +5,8 @@ from attr import attrib, attrs
 from attr.validators import instance_of
 
 from vistautils.parameters import Parameters
-from vistautils.scripts import join_key_value_stores, split_key_value_store
+from vistautils.scripts import join_key_value_stores
+from vistautils.scripts import split_key_value_store as split_entry_point
 
 from pegasus_wrapper.artifact import AbstractArtifact
 from pegasus_wrapper.locator import Locator
@@ -39,7 +40,7 @@ def split_key_value_store(
     split_output_dir = workflow_builder.directory_for(split_locator)
     split_job = workflow_builder.run_python_on_parameters(
         split_locator,
-        split_key_value_store,
+        split_entry_point,
         Parameters.from_mapping(
             {
                 "input": {"type": "zip", "path": input_zip.path},
