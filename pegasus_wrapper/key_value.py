@@ -7,7 +7,9 @@ from attr.validators import instance_of
 from vistautils.parameters import Parameters
 from vistautils.scripts import join_key_value_stores, split_key_value_store
 
-from pegasus_wrapper import AbstractArtifact, Locator, WorkflowBuilder
+from pegasus_wrapper.artifact import AbstractArtifact
+from pegasus_wrapper.locator import Locator
+from pegasus_wrapper.workflow import WorkflowBuilder
 
 from typing_extensions import Protocol
 

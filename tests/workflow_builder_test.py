@@ -1,6 +1,6 @@
 from vistautils.parameters import Parameters
 
-from pegasus_wrapper import WorkflowBuilder
+from pegasus_wrapper.workflow import WorkflowBuilder
 
 
 def test_simple_dax(tmp_path):
