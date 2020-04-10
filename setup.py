@@ -17,7 +17,7 @@ setup(
     author_email="jalichtefeld@gmail.com,gabbard@isi.edu",
     description="A higher-level API for ISI Pegasus, adapted to the quirks of the ISI Vista group",
     url="https://github.com/isi-vista/vista-pegasus-wrapper",
-    packages=['pegasus_wrapper'],
+    packages=['pegasus_wrapper', 'pegasus_wrapper.resources'],
     # 3.6 and up, but not Python 4
     python_requires="~=3.6",
     install_requires=[
