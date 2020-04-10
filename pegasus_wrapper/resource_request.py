@@ -9,9 +9,9 @@ from vistautils.memory_amount import MemoryAmount
 from vistautils.parameters import Parameters
 from vistautils.range import Range
 
-from Pegasus.DAX3 import Job, Namespace, Profile
 from saga_tools.slurm import to_slurm_memory_string
 
+from Pegasus.DAX3 import Job, Namespace, Profile
 from typing_extensions import Protocol
 
 

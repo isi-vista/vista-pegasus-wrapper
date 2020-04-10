@@ -14,7 +14,6 @@ Terminology
     that one computation depends on the output of another computation.
 - an `Artifact` is a pairing of a value together with one or more `DependencyNode`\ s.
 """
-# pylint:disable=missing-docstring
 
 
 from pegasus_wrapper.version import version as __version__  # noqa
