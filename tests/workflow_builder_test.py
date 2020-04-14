@@ -58,7 +58,7 @@ def test_dax_with_job_on_saga(tmp_path):
     nums = immutableset(int(random.random() * 100) for _ in range(0, 25))
     multiply_output_file = tmp_path / "multiplied_nums.txt"
     sorted_output_file = tmp_path / "sorted_nums.txt"
-    with open(str(multiply_input_file)) as mult_file:
+    with open(str(multiply_input_file), "w") as mult_file:
         mult_file.writelines(f"{num}" for num in nums)
     multiply_params = Parameters.from_mapping(
         {"input_file": multiply_input_file, "ouput_file": multiply_output_file, "x": 4}
