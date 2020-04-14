@@ -128,4 +128,4 @@ def test_dax_with_job_on_saga(tmp_path):
     submit_script_process = subprocess.Popen(
         ["sh", str(submit_script_one)], stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
-    stdout, stderr = submit_script_process.communicate()
+    _, _ = submit_script_process.communicate()
