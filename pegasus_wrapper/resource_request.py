@@ -77,7 +77,7 @@ class SlurmResourceRequest(ResourceRequest):
         return SlurmResourceRequest(
             partition=params.string("partition"),
             num_cpus=params.optional_positive_integer("num_cpus"),
-            num_gpus=params.integer("num_gpus"),
+            num_gpus=params.optional_integer("num_gpus"),
             memory=MemoryAmount.parse(params.string("memory"))
             if "memory" in params
             else None,
