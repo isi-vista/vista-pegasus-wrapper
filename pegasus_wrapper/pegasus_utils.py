@@ -5,9 +5,9 @@ from Pegasus.api import Arch
 from Pegasus.DAX3 import OS, PFN, Executable, File
 
 SUBMIT_SCRIPT = """#!/bin/bash
-​
+
 set -e
-​
+
 pegasus-plan \\
     --conf pegasus.conf \\
     --dax {dax_file} \\
