@@ -77,7 +77,6 @@ def test_dax_with_job_on_saga(tmp_path):
     multiple_dir = workflow_builder.directory_for(multiply_job_name)
     assert (multiple_dir / "___run.sh").exists()
     assert (multiple_dir / "____params.params").exists()
-    assert (multiple_dir / str(multiply_job_name).replace("/", "_")).exists()
 
     sort_job_name = Locator(_parse_parts("jobs/sort"))
     sort_dir = workflow_builder.directory_for(sort_job_name)
@@ -90,7 +89,6 @@ def test_dax_with_job_on_saga(tmp_path):
     )
     assert (sort_dir / "___run.sh").exists()
     assert (sort_dir / "____params.params").exists()
-    assert (sort_dir / str(multiply_job_name).replace("/", "_")).exists()
 
     dax_file_one = workflow_builder.write_dax_to_dir(tmp_path)
     dax_file_two = workflow_builder.write_dax_to_dir()
