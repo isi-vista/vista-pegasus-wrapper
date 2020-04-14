@@ -31,4 +31,5 @@ jobs:
               - make check coverage
 
 after_success:
+  - pegasus-status
   - codecov -t 37a4eff3-f4bc-49fe-a6cf-d28e329be5c8

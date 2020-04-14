@@ -11,6 +11,8 @@ from pegasus_wrapper.workflow import WorkflowBuilder
 from scripts.multiply_by_x import main as multiply_by_x_main
 from scripts.sort_nums_in_file import main as sort_nums_main
 
+import pytest
+
 
 def test_simple_dax(tmp_path):
     params = Parameters.from_mapping(
@@ -35,6 +37,17 @@ def test_simple_dax(tmp_path):
     assert workflow_builder._default_site == "saga"  # pylint:disable=protected-access
     assert workflow_builder.default_resource_request  # pylint:disable=protected-access
     assert workflow_builder._job_graph is not None  # pylint:disable=protected-access
+
+
+def test_locator():
+    job = Locator(_parse_parts("job"))
+    example = Locator(_parse_parts("example/path"))
+    combined = example / job
+    combined_from_string = example / "job"
+
+    assert combined.__repr__() == combined_from_string.__repr__()
+    with pytest.raises(RuntimeError):
+        _ = combined / 90
 
 
 def test_dax_with_job_on_saga(tmp_path):
@@ -116,5 +129,3 @@ def test_dax_with_job_on_saga(tmp_path):
         ["sh", str(submit_script_one)], stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     stdout, stderr = submit_script_process.communicate()
-    print(stdout)
-    print(stderr)
