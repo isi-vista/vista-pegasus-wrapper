@@ -68,6 +68,14 @@ class WorkflowBuilder:
     )
 
     _job_graph: ADAG = attrib(init=False)
+    _signature_to_job: Dict[Any, DependencyNode] = attrib(
+        init=False, factory=Factory(dict)
+    )
+    """
+    Occassionally an identical job may be scheduled multiple times
+    in the workflow graph. We compute this based on a job signature
+    and only actually schedule the job once.
+    """
 
     # _graph: DiGraph = attrib(
     #     validator=instance_of(DiGraph), kw_only=True, default=DiGraph()
@@ -159,6 +167,17 @@ class WorkflowBuilder:
         else:
             fully_qualified_module_name = fully_qualified_name(python_module)
 
+        # If we've already scheduled this identical job,
+        # then don't schedule it again.
+        params_sink = CharSink.to_string()
+        signature = (
+            fully_qualified_module_name,
+            YAMLParametersWriter().write(parameters, params_sink),
+        )
+        if signature in self._signature_to_job:
+            logging.info("Job %s recognized as a duplicate", job_name)
+            return self._signature_to_job[signature]
+
         job_dir = self.directory_for(job_name)
         script_path = job_dir / "___run.sh"
         self._conda_script_generator.write_shell_script_to(
@@ -191,7 +210,9 @@ class WorkflowBuilder:
             job, job_name=self._job_name_for(job_name), log_file=job_dir / "___stdout.log"
         )
 
-        return DependencyNode.from_job(job)
+        dependency_node = DependencyNode.from_job(job)
+        self._signature_to_job[signature] = dependency_node
+        return dependency_node
 
     # def _add_files_to_graph(
     #     self, job: Job, files: Iterable[File], *, is_input: bool
