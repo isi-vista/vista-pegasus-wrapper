@@ -1,13 +1,14 @@
 import logging
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Dict, Iterable, Optional
 
-from attr import attrib, attrs
+from attr import Factory, attrib, attrs
 from attr.validators import instance_of, optional
 
 from immutablecollections import immutableset
 from vistautils.class_utils import fully_qualified_name
-from vistautils.parameters import Parameters
+from vistautils.io_utils import CharSink
+from vistautils.parameters import Parameters, YAMLParametersWriter
 
 from pegasus_wrapper import resources
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
