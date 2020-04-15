@@ -10,13 +10,12 @@ from vistautils.class_utils import fully_qualified_name
 from vistautils.io_utils import CharSink
 from vistautils.parameters import Parameters, YAMLParametersWriter
 
+from Pegasus.DAX3 import ADAG, Executable, Job
 from pegasus_wrapper import resources
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
 from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.pegasus_utils import build_submit_script, path_to_pfn
 from pegasus_wrapper.resource_request import ResourceRequest
-
-from Pegasus.DAX3 import ADAG, Executable, Job
 
 try:
     import importlib.resources as pkg_resources
@@ -212,6 +211,8 @@ class WorkflowBuilder:
 
         dependency_node = DependencyNode.from_job(job)
         self._signature_to_job[signature] = dependency_node
+
+        logging.info("Scheduled Python job %s", job_name)
         return dependency_node
 
     # def _add_files_to_graph(

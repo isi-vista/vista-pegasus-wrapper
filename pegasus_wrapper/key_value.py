@@ -106,7 +106,7 @@ def transform_key_value_store(
     output_locator: Locator,
     workflow_builder: WorkflowBuilder,
     parallelism: int,
-) -> ZipKeyValueStore:
+) -> KeyValueStore:
     return join_to_key_value_zip(
         [
             transform(split, workflow_builder=workflow_builder)
@@ -116,4 +116,33 @@ def transform_key_value_store(
         ],
         output_locator=output_locator,
         workflow_builder=workflow_builder,
+    )
+
+
+def downsample_key_value_store(
+    input_store: KeyValueStore,
+    *,
+    limit: int,
+    output_locator: Locator,
+    workflow_builder: WorkflowBuilder,
+) -> KeyValueStore:
+    if not output_locator:
+        output_locator = input_store.locator / f"downsampled-{limit}"
+    output_zip_path = workflow_builder.directory_for(output_locator) / "downsampled.zip"
+    downsample_job = workflow_builder.run_python_on_parameters(
+        output_locator,
+        downsample_key_value_store,
+        Parameters.from_mapping(
+            {
+                "input": input_store.input_parameters(),
+                "output_zip_path": output_zip_path,
+                "num_to_sample": limit,
+                "random_seed": 0,
+            }
+        ),
+    )
+    return ZipKeyValueStore(
+        path=output_zip_path,
+        locator=output_locator,
+        computed_by=[input_store.computed_by, downsample_job],
     )
