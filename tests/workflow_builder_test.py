@@ -71,7 +71,7 @@ def test_dax_with_job_on_saga(tmp_path):
     nums = immutableset(int(random.random() * 100) for _ in range(0, 25))
     multiply_output_file = tmp_path / "multiplied_nums.txt"
     sorted_output_file = tmp_path / "sorted_nums.txt"
-    with open(str(multiply_input_file), "w") as mult_file:
+    with multiply_input_file.open("w") as mult_file:
         mult_file.writelines(f"{num}" for num in nums)
     multiply_params = Parameters.from_mapping(
         {"input_file": multiply_input_file, "ouput_file": multiply_output_file, "x": 4}
@@ -126,6 +126,9 @@ def test_dax_with_job_on_saga(tmp_path):
     assert submit_script_two.exists()
 
     submit_script_process = subprocess.Popen(
-        ["sh", str(submit_script_one)], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        ["sh", str(submit_script_one)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8"
     )
-    _, _ = submit_script_process.communicate()
+    stdout, stderr = submit_script_process.communicate()
+
+    print(stdout)
+    print(stderr)
