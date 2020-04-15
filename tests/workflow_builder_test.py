@@ -126,7 +126,10 @@ def test_dax_with_job_on_saga(tmp_path):
     assert submit_script_two.exists()
 
     submit_script_process = subprocess.Popen(
-        ["sh", str(submit_script_one)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8"
+        ["sh", str(submit_script_one)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8",
     )
     stdout, stderr = submit_script_process.communicate()
 
