@@ -8,7 +8,7 @@ from vistautils.parameters import Parameters
 from vistautils.scripts import downsample_key_value_store, join_key_value_stores
 from vistautils.scripts import split_key_value_store as split_entry_point
 
-from pegasus_wrapper.artifact import AbstractArtifact, Artifact
+from pegasus_wrapper.artifact import AbstractArtifact, Artifact, ValueArtifact
 from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.workflow import WorkflowBuilder
 
@@ -150,3 +150,62 @@ def downsample(
         locator=output_locator,
         depends_on=[input_store.depends_on, downsample_job],
     )
+
+
+def explicit_train_dev_test_split(
+    corpus: KeyValueStore,
+    *,
+    train_ids: ValueArtifact[Path],
+    dev_ids: ValueArtifact[Path],
+    test_ids: ValueArtifact[Path],
+    output_locator: Locator,
+    exhaustive: bool = True,
+    downsample_to: Optional[int] = None,
+    workflow_builder: WorkflowBuilder,
+) -> Tuple[KeyValueStore, KeyValueStore, KeyValueStore]:
+    train_locator = output_locator / "train"
+    dev_locator = output_locator / "dev"
+    test_locator = output_locator / "test"
+
+    train_zip = workflow_builder.directory_for(train_locator) / "train.zip"
+    dev_zip = workflow_builder.directory_for(dev_locator) / "dev.zip"
+    test_zip = workflow_builder.directory_for(test_locator) / "test.zip"
+
+    split_job = workflow_builder.run_python_on_parameters(
+        output_locator,
+        split_key_value_store,
+        parameters={
+            "input": corpus.input_parameters(),
+            "explicit_split": {
+                "train": {"keys_file": train_ids.value, "output_file": train_zip},
+                "dev": {"keys_file": dev_ids.value, "output_file": dev_zip},
+                "test": {"keys_file": test_ids.value, "output_file": test_zip},
+                "must_be_exhaustive": exhaustive,
+            },
+        },
+        depends_on=[corpus],
+    )
+
+    deps = [
+        corpus.depends_on,
+        split_job,
+        train_ids.depends_on,
+        dev_ids.depends_on,
+        test_ids.depends_on,
+    ]
+
+    train_store = ZipKeyValueStore(train_zip, locator=train_locator, depends_on=deps)
+    dev_store = ZipKeyValueStore(dev_zip, locator=dev_locator, depends_on=deps)
+    test_store = ZipKeyValueStore(test_zip, locator=test_locator, depends_on=deps)
+    if downsample_to is None:
+        return (train_store, dev_store, test_store)
+    else:
+        return (
+            downsample(
+                train_store, limit=downsample_to, workflow_builder=workflow_builder
+            ),
+            downsample(dev_store, limit=downsample_to, workflow_builder=workflow_builder),
+            downsample(
+                test_store, limit=downsample_to, workflow_builder=workflow_builder
+            ),
+        )
