@@ -5,7 +5,7 @@ from attr import attrib, attrs
 from attr.validators import instance_of
 
 from vistautils.parameters import Parameters
-from vistautils.scripts import join_key_value_stores
+from vistautils.scripts import downsample_key_value_store, join_key_value_stores
 from vistautils.scripts import split_key_value_store as split_entry_point
 
 from pegasus_wrapper.artifact import AbstractArtifact, Artifact
@@ -122,7 +122,7 @@ def transform_key_value_store(
     )
 
 
-def downsample_key_value_store(
+def downsample(
     input_store: KeyValueStore,
     *,
     limit: int,
