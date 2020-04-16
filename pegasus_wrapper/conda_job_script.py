@@ -147,6 +147,7 @@ fi
 {spack_lines}
 cd {working_directory}
 echo `which python`
+echo python -m {entry_point} {param_file}
 python -m {entry_point} {param_file}
 """
 
