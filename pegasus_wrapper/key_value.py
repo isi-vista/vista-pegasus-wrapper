@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Tuple
+from typing import Any, Iterable, Mapping, Optional, Tuple
 
 from attr import attrib, attrs
 from attr.validators import instance_of
@@ -66,11 +66,12 @@ def split_key_value_store(
                 "output_dir": split_output_dir,
             }
         ),
+        depends_on=input_store,
     )
     return tuple(
         ZipKeyValueStore(
             path=split_output_dir / f"{slice_index}.zip",
-            computed_by=split_job,
+            depends_on=split_job,
             locator=split_locator / str(slice_index),
         )
         for slice_index in range(num_parts)
@@ -83,6 +84,7 @@ def join_to_key_value_zip(
     output_locator: Locator,
     workflow_builder: WorkflowBuilder,
 ) -> ZipKeyValueStore:
+    key_value_zips_to_join = tuple(key_value_zips_to_join)
     output_zip_path = workflow_builder.directory_for(output_locator) / "joined.zip"
     join_job = workflow_builder.run_python_on_parameters(
         output_locator,
@@ -93,9 +95,10 @@ def join_to_key_value_zip(
                 "output": {"type": "zip", "path": output_zip_path},
             }
         ),
+        depends_on=key_value_zips_to_join,
     )
     return ZipKeyValueStore(
-        path=output_zip_path, locator=output_locator, computed_by=join_job
+        path=output_zip_path, locator=output_locator, depends_on=join_job
     )
 
 
@@ -123,7 +126,7 @@ def downsample_key_value_store(
     input_store: KeyValueStore,
     *,
     limit: int,
-    output_locator: Locator,
+    output_locator: Optional[Locator] = None,
     workflow_builder: WorkflowBuilder,
 ) -> KeyValueStore:
     if not output_locator:
@@ -140,9 +143,10 @@ def downsample_key_value_store(
                 "random_seed": 0,
             }
         ),
+        depends_on=input_store,
     )
     return ZipKeyValueStore(
         path=output_zip_path,
         locator=output_locator,
-        computed_by=[input_store.computed_by, downsample_job],
+        depends_on=[input_store.depends_on, downsample_job],
     )
