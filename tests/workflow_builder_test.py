@@ -4,6 +4,7 @@ from random import Random
 from immutablecollections import immutableset
 from vistautils.parameters import Parameters
 
+from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator, _parse_parts
 from pegasus_wrapper.pegasus_utils import build_submit_script
 from pegasus_wrapper.resource_request import SlurmResourceRequest
@@ -84,9 +85,9 @@ def test_dax_with_job_on_saga(tmp_path):
     workflow_builder = WorkflowBuilder.from_params(workflow_params)
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
-    dependent_job = workflow_builder.run_python_on_parameters(
+    multiply_artifact = ValueArtifact.computed(multiply_output_file, computed_by=workflow_builder.run_python_on_parameters(
         multiply_job_name, multiply_by_x_main, multiply_params
-    )
+    ))
     multiple_dir = workflow_builder.directory_for(multiply_job_name)
     assert (multiple_dir / "___run.sh").exists()
     assert (multiple_dir / "____params.params").exists()
@@ -97,7 +98,7 @@ def test_dax_with_job_on_saga(tmp_path):
         sort_job_name,
         sort_nums_main,
         sort_params,
-        depends_on=immutableset([dependent_job]),
+        depends_on=immutableset(multiply_artifact.computed_by),
         resource_request=resources,
     )
     assert (sort_dir / "___run.sh").exists()
