@@ -40,7 +40,11 @@ class ZipKeyValueStore(AbstractArtifact, KeyValueStore):
 
 class KeyValueTransform(Protocol):
     def __call__(
-        self, input_zip: KeyValueStore, *, workflow_builder: WorkflowBuilder
+        self,
+        input_zip: KeyValueStore,
+        *,
+        workflow_builder: WorkflowBuilder,
+        output_locator: Optional[Locator] = None,
     ) -> KeyValueStore:
         """
         A function which adds jobs to *workflow_builder* to transform *input_zip*
@@ -110,16 +114,24 @@ def transform_key_value_store(
     workflow_builder: WorkflowBuilder,
     parallelism: int,
 ) -> KeyValueStore:
-    return join_to_key_value_zip(
-        [
-            transform(split, workflow_builder=workflow_builder)
-            for split in split_key_value_store(
-                input_store, num_parts=parallelism, workflow_builder=workflow_builder
-            )
-        ],
-        output_locator=output_locator,
-        workflow_builder=workflow_builder,
-    )
+    if parallelism > 1:
+        return join_to_key_value_zip(
+            [
+                transform(split, workflow_builder=workflow_builder)
+                for split in split_key_value_store(
+                    input_store, num_parts=parallelism, workflow_builder=workflow_builder
+                )
+            ],
+            output_locator=output_locator,
+            workflow_builder=workflow_builder,
+        )
+    elif parallelism == 1:
+        # Not need for split/join overhead if there is no parallelism
+        return transform(
+            input_store, workflow_builder=workflow_builder, output_locator=output_locator
+        )
+    else:
+        raise RuntimeError(f"Parallelism must be positive but got {parallelism}")
 
 
 def downsample(
