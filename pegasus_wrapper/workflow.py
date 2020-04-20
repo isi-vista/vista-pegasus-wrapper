@@ -245,7 +245,7 @@ class WorkflowBuilder:
     #         output_xml_dir / "submit.sh", dax_file_name, self._workflow_directory
     #     )
 
-    def write_dax_to_dir(self, output_xml_dir: Optional[Path] = None) -> None:
+    def write_dax_to_dir(self, output_xml_dir: Optional[Path] = None) -> Path:
         if not output_xml_dir:
             output_xml_dir = self._workflow_directory
 
@@ -268,6 +268,8 @@ class WorkflowBuilder:
         pegasus_conf_path.write_text(
             pkg_resources.read_text(resources, "pegasus.conf"), encoding="utf-8"
         )
+
+        return dax_file
 
     # def get_job_inputs(self, job: Job) -> ImmutableSet[File]:
     #     return immutableset(
