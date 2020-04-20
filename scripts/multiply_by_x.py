@@ -1,5 +1,4 @@
-from pathlib import Path
-
+# This script is for testing purposes only
 from vistautils.parameters import Parameters
 from vistautils.parameters_only_entrypoint import parameters_only_entry_point
 
