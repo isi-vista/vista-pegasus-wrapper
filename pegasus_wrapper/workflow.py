@@ -143,6 +143,15 @@ class WorkflowBuilder:
         This method returns a `DependencyNode` which can be used in *depends_on*
         for future jobs.
         """
+        job_dir = self.directory_for(job_name)
+        checkpoint_path = job_dir / "___ckpt"
+
+        if checkpoint_path.exists():
+            logging.info(
+                "Skipping %s because checkpoint indicates it is complete", job_name
+            )
+            return DependencyNode.already_done()
+
         depends_on = _canonicalize_depends_on(depends_on)
         if isinstance(python_module, str):
             fully_qualified_module_name = python_module
@@ -162,7 +171,6 @@ class WorkflowBuilder:
             logging.info("Job %s recognized as a duplicate", job_name)
             return self._signature_to_job[signature]
 
-        job_dir = self.directory_for(job_name)
         script_path = job_dir / "___run.sh"
         self._conda_script_generator.write_shell_script_to(
             entry_point_name=fully_qualified_module_name,
@@ -170,6 +178,7 @@ class WorkflowBuilder:
             working_directory=job_dir,
             script_path=script_path,
             params_path=job_dir / "____params.params",
+            ckpt_path=checkpoint_path,
         )
         script_executable = Executable(
             namespace=self._namespace,
@@ -184,7 +193,8 @@ class WorkflowBuilder:
         job = Job(script_executable)
         self._job_graph.addJob(job)
         for parent_dependency in depends_on:
-            self._job_graph.depends(job, parent_dependency.job)
+            if parent_dependency.job:
+                self._job_graph.depends(job, parent_dependency.job)
 
         if resource_request is not None:
             resource_request = self.default_resource_request.unify(resource_request)
