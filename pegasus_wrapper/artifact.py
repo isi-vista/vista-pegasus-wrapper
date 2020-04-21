@@ -21,11 +21,15 @@ class DependencyNode:
     depends on the output of another computation.
     """
 
-    job: Job = attrib(validator=instance_of(Job), kw_only=True)
+    job: Optional[Job] = attrib(validator=optional(instance_of(Job)), kw_only=True)
 
     @staticmethod
     def from_job(job: Job) -> "DependencyNode":
         return DependencyNode(job=job)
+
+    @staticmethod
+    def already_done() -> "DependencyNode":
+        return DependencyNode(job=None)
 
 
 class Artifact(Protocol):
