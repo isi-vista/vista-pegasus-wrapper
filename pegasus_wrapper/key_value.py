@@ -185,7 +185,7 @@ def explicit_train_dev_test_split(
 
     split_job = workflow_builder.run_python_on_parameters(
         output_locator,
-        split_key_value_store,
+        split_entry_point,
         parameters={
             "input": corpus.input_parameters(),
             "explicit_split": {
