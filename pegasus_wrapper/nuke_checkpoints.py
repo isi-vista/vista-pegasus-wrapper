@@ -1,3 +1,13 @@
+"""
+Removes checkpoints from an experiment directory.
+
+Our wrapper writes its own checkpoints to the locator directory for each completed job.
+If these checkpoints exist, `WorkflowBuilder` won't add the corresponding jobs
+to the generated DAX.
+
+If you want to force rerun of a job, apply this script to a directory.
+All checkpoints from that directory and its sub-directories will be removed.
+"""
 import sys
 from pathlib import Path
 
