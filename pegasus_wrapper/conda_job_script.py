@@ -83,7 +83,12 @@ class CondaJobScriptGenerator:
         )
 
     def generate_shell_script(
-        self, entry_point_name: str, param_file: Path, *, working_directory: Path
+        self,
+        entry_point_name: str,
+        param_file: Path,
+        *,
+        working_directory: Path,
+        ckpt_path: Optional[Path] = None,
     ):
 
         return CONDA_SCRIPT.format(
@@ -92,6 +97,7 @@ class CondaJobScriptGenerator:
             working_directory=working_directory,
             entry_point=entry_point_name,
             param_file=param_file,
+            ckpt_line=f"touch {ckpt_path.absolute()}" if ckpt_path else "",
         )
 
     def write_shell_script_to(
@@ -102,6 +108,7 @@ class CondaJobScriptGenerator:
         working_directory: Path,
         script_path: Path,
         params_path: Optional[Path],
+        ckpt_path: Optional[Path] = None,
     ) -> None:
         if isinstance(parameters, Path):
             if params_path:
@@ -126,6 +133,7 @@ class CondaJobScriptGenerator:
                 entry_point_name=entry_point_name,
                 param_file=params_path,
                 working_directory=working_directory,
+                ckpt_path=ckpt_path,
             ),
             encoding="utf-8",
         )
@@ -147,7 +155,9 @@ fi
 {spack_lines}
 cd {working_directory}
 echo `which python`
+echo python -m {entry_point} {param_file}
 python -m {entry_point} {param_file}
+{ckpt_line}
 """
 
 if __name__ == "__main__":

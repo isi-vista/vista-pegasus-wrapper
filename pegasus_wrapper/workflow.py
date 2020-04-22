@@ -1,43 +1,27 @@
 import logging
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Dict, Optional, Union
 
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
 
-from immutablecollections import immutableset
 from vistautils.class_utils import fully_qualified_name
-from vistautils.parameters import Parameters
+from vistautils.io_utils import CharSink
+from vistautils.parameters import Parameters, YAMLParametersWriter
 
+from Pegasus.DAX3 import ADAG, Executable, Job
 from pegasus_wrapper import resources
+from pegasus_wrapper.artifact import DependencyNode, _canonicalize_depends_on
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
 from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.pegasus_utils import build_submit_script, path_to_pfn
 from pegasus_wrapper.resource_request import ResourceRequest
-
-from Pegasus.DAX3 import ADAG, Executable, Job
 
 try:
     import importlib.resources as pkg_resources
 except ImportError:
     # Try backported to PY <3.7 'importlib_resources'
     import importlib_resources as pkg_resources
-
-
-@attrs(slots=True, eq=False)
-class DependencyNode:
-    """
-    An abstract object tied to a computation
-    which can be used only for the purpose
-    of indicating that one computation
-    depends on the output of another computation.
-    """
-
-    job: Job = attrib(validator=instance_of(Job), kw_only=True)
-
-    @staticmethod
-    def from_job(job: Job) -> "DependencyNode":
-        return DependencyNode(job=job)
 
 
 @attrs(frozen=True, slots=True)
@@ -67,6 +51,12 @@ class WorkflowBuilder:
     )
 
     _job_graph: ADAG = attrib(init=False)
+    _signature_to_job: Dict[Any, DependencyNode] = attrib(init=False, factory=dict)
+    """
+    Occassionally an identical job may be scheduled multiple times
+    in the workflow graph. We compute this based on a job signature
+    and only actually schedule the job once.
+    """
 
     # _graph: DiGraph = attrib(
     #     validator=instance_of(DiGraph), kw_only=True, default=DiGraph()
@@ -139,9 +129,9 @@ class WorkflowBuilder:
         self,
         job_name: Locator,
         python_module: Any,
-        parameters: Parameters,
+        parameters: Union[Parameters, Dict[str, Any]],
         *,
-        depends_on: Iterable[DependencyNode] = immutableset(),
+        depends_on,
         resource_request: Optional[ResourceRequest] = None,
     ) -> DependencyNode:
         """
@@ -153,12 +143,34 @@ class WorkflowBuilder:
         This method returns a `DependencyNode` which can be used in *depends_on*
         for future jobs.
         """
+        job_dir = self.directory_for(job_name)
+        checkpoint_path = job_dir / "___ckpt"
+
+        if checkpoint_path.exists():
+            logging.info(
+                "Skipping %s because checkpoint indicates it is complete", job_name
+            )
+            return DependencyNode.already_done()
+
+        depends_on = _canonicalize_depends_on(depends_on)
         if isinstance(python_module, str):
             fully_qualified_module_name = python_module
         else:
             fully_qualified_module_name = fully_qualified_name(python_module)
 
-        job_dir = self.directory_for(job_name)
+        # allow users to specify the parameters as a dict for convenience
+        if not isinstance(parameters, Parameters):
+            parameters = Parameters.from_mapping(parameters)
+
+        # If we've already scheduled this identical job,
+        # then don't schedule it again.
+        params_sink = CharSink.to_string()
+        YAMLParametersWriter().write(parameters, params_sink)
+        signature = (fully_qualified_module_name, params_sink.last_string_written)
+        if signature in self._signature_to_job:
+            logging.info("Job %s recognized as a duplicate", job_name)
+            return self._signature_to_job[signature]
+
         script_path = job_dir / "___run.sh"
         self._conda_script_generator.write_shell_script_to(
             entry_point_name=fully_qualified_module_name,
@@ -166,6 +178,7 @@ class WorkflowBuilder:
             working_directory=job_dir,
             script_path=script_path,
             params_path=job_dir / "____params.params",
+            ckpt_path=checkpoint_path,
         )
         script_executable = Executable(
             namespace=self._namespace,
@@ -175,11 +188,13 @@ class WorkflowBuilder:
             arch="x86_64",
         )
         script_executable.addPFN(path_to_pfn(script_path, site=self._default_site))
-        self._job_graph.addExecutable(script_executable)
+        if not self._job_graph.hasExecutable(script_executable):
+            self._job_graph.addExecutable(script_executable)
         job = Job(script_executable)
         self._job_graph.addJob(job)
         for parent_dependency in depends_on:
-            self._job_graph.depends(job, parent_dependency.job)
+            if parent_dependency.job:
+                self._job_graph.depends(job, parent_dependency.job)
 
         if resource_request is not None:
             resource_request = self.default_resource_request.unify(resource_request)
@@ -190,7 +205,11 @@ class WorkflowBuilder:
             job, job_name=self._job_name_for(job_name), log_file=job_dir / "___stdout.log"
         )
 
-        return DependencyNode.from_job(job)
+        dependency_node = DependencyNode.from_job(job)
+        self._signature_to_job[signature] = dependency_node
+
+        logging.info("Scheduled Python job %s", job_name)
+        return dependency_node
 
     # def _add_files_to_graph(
     #     self, job: Job, files: Iterable[File], *, is_input: bool
