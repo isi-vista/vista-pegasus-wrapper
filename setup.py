@@ -22,7 +22,8 @@ setup(
     # 3.6 and up, but not Python 4
     python_requires="~=3.6",
     install_requires=[
-        "importlib-resources==1.4.0"
+        "importlib-resources==1.4.0",
+	"vistautils>=0.21.0"
     ],
     scripts=[],
     classifiers=[

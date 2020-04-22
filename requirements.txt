@@ -2,7 +2,7 @@ git+https://github.com/pegasus-isi/pegasus.git@7d70c4a18f4df30090c830c5b07f388df
 git+https://github.com/isi-vista/saga-tools.git@master#egg=saga-tools
 # core requirements
 attrs==19.2.0
-vistautils==0.20.0
+vistautils==0.21.0
 immutablecollections==0.10.0
 networkx==2.3
 importlib-resources==1.4.0
