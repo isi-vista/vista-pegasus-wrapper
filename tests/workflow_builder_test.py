@@ -85,10 +85,10 @@ def test_dax_with_job_on_saga(tmp_path):
     workflow_builder = WorkflowBuilder.from_params(workflow_params)
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
-    multiply_artifact = ValueArtifact.computed(
+    multiply_artifact = ValueArtifact(
         multiply_output_file,
-        computed_by=workflow_builder.run_python_on_parameters(
-            multiply_job_name, multiply_by_x_main, multiply_params
+        depends_on=workflow_builder.run_python_on_parameters(
+            multiply_job_name, multiply_by_x_main, multiply_params, depends_on=[]
         ),
     )
     multiple_dir = workflow_builder.directory_for(multiply_job_name)
