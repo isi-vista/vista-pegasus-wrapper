@@ -1,4 +1,4 @@
-from typing import Generic, Iterable, Optional, Sequence, TypeVar, Union
+from typing import Generic, Optional, Sequence, TypeVar
 
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
@@ -106,16 +106,3 @@ class ValueArtifact(AbstractArtifact, Generic[_T]):
         value: _T, *, locator: Optional[Locator] = None
     ) -> "ValueArtifact[_T]":
         return ValueArtifact(value, depends_on=immutableset(), locator=locator)
-
-    @staticmethod
-    def computed(
-        value: _T,
-        *,
-        computed_by: Union[DependencyNode, Iterable[DependencyNode]],
-        locator: Optional[Locator] = None,
-    ) -> "ValueArtifact[_T]":
-        if isinstance(computed_by, DependencyNode):
-            canonical_computed_by = immutableset([computed_by])
-        else:
-            canonical_computed_by = immutableset(computed_by)
-        return ValueArtifact(value, depends_on=canonical_computed_by, locator=locator)

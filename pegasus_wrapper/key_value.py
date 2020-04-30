@@ -16,6 +16,18 @@ from typing_extensions import Protocol
 
 
 class KeyValueStore(Artifact, Protocol):
+    """
+    A key-value store is any sort of a mapping between keys and values store in some manner.
+
+    This represents a placeholder for a key-value store in a Pegasus workflow.
+    See *key_value.py` in *vistautils* for the actual implementations of key-value stores.
+
+    The most common implementation in our workflow
+    is a zip file mapping document IDs to document content.
+
+    Note that a key-value store may be empty (store no mappings).
+    """
+
     def input_parameters(self) -> Mapping[str, Any]:
         """
         Parameters to be passed to an entry point to use this key-value store as input.
@@ -29,6 +41,10 @@ class KeyValueStore(Artifact, Protocol):
 
 @attrs(frozen=True)
 class ZipKeyValueStore(AbstractArtifact, KeyValueStore):
+    """
+    An Pegasus placeholder for a `KeyValueStore` backed by a zip file.
+    """
+
     path: Path = attrib(validator=instance_of(Path))
 
     def input_parameters(self) -> Mapping[str, Any]:
@@ -39,6 +55,10 @@ class ZipKeyValueStore(AbstractArtifact, KeyValueStore):
 
 
 class KeyValueTransform(Protocol):
+    """
+    A transformation of one `KeyValueStore` into another.
+    """
+
     def __call__(
         self,
         input_zip: KeyValueStore,
@@ -55,6 +75,11 @@ class KeyValueTransform(Protocol):
 def split_key_value_store(
     input_store: KeyValueStore, *, num_parts: int, workflow_builder: WorkflowBuilder
 ) -> Tuple[KeyValueStore]:
+    """
+    Splits *input_store* into *num_parts* pieces of nearly equal size.
+
+    Some of the resulting key-value stores may be empty.
+    """
     if num_parts <= 0:
         raise RuntimeError("Number of parts must be positive")
 
@@ -164,6 +189,19 @@ def downsample(
     )
 
 
+@attrs(frozen=True, slots=True)
+class DataSplit:
+    r"""
+    A train/dev/test split over `KeyValueStore`\ s.
+
+    If any of these are missing, the corresponding `KeyValueStore` should
+    refer to an empty key-value store.
+    """
+    train: KeyValueStore = attrib(validator=instance_of(KeyValueStore), kw_only=True)
+    dev: KeyValueStore = attrib(validator=instance_of(KeyValueStore), kw_only=True)
+    test: KeyValueStore = attrib(validator=instance_of(KeyValueStore), kw_only=True)
+
+
 def explicit_train_dev_test_split(
     corpus: KeyValueStore,
     *,
@@ -174,7 +212,7 @@ def explicit_train_dev_test_split(
     exhaustive: bool = True,
     downsample_to: Optional[int] = None,
     workflow_builder: WorkflowBuilder,
-) -> Tuple[KeyValueStore, KeyValueStore, KeyValueStore]:
+) -> DataSplit:
     train_locator = output_locator / "train"
     dev_locator = output_locator / "dev"
     test_locator = output_locator / "test"
@@ -210,14 +248,16 @@ def explicit_train_dev_test_split(
     dev_store = ZipKeyValueStore(dev_zip, locator=dev_locator, depends_on=deps)
     test_store = ZipKeyValueStore(test_zip, locator=test_locator, depends_on=deps)
     if downsample_to is None:
-        return (train_store, dev_store, test_store)
+        return DataSplit(train=train_store, dev=dev_store, test=test_store)
     else:
-        return (
-            downsample(
+        return DataSplit(
+            train=downsample(
                 train_store, limit=downsample_to, workflow_builder=workflow_builder
             ),
-            downsample(dev_store, limit=downsample_to, workflow_builder=workflow_builder),
-            downsample(
+            dev=downsample(
+                dev_store, limit=downsample_to, workflow_builder=workflow_builder
+            ),
+            test=downsample(
                 test_store, limit=downsample_to, workflow_builder=workflow_builder
             ),
         )
