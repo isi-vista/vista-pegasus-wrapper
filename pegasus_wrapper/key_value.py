@@ -164,6 +164,13 @@ def downsample(
     )
 
 
+@attrs(frozen=True, slots=True)
+class DataSplit:
+    train: KeyValueStore = attrib(validator=instance_of(KeyValueStore), kw_only=True)
+    dev: KeyValueStore = attrib(validator=instance_of(KeyValueStore), kw_only=True)
+    test: KeyValueStore = attrib(validator=instance_of(KeyValueStore), kw_only=True)
+
+
 def explicit_train_dev_test_split(
     corpus: KeyValueStore,
     *,
@@ -174,7 +181,7 @@ def explicit_train_dev_test_split(
     exhaustive: bool = True,
     downsample_to: Optional[int] = None,
     workflow_builder: WorkflowBuilder,
-) -> Tuple[KeyValueStore, KeyValueStore, KeyValueStore]:
+) -> DataSplit:
     train_locator = output_locator / "train"
     dev_locator = output_locator / "dev"
     test_locator = output_locator / "test"
@@ -210,14 +217,16 @@ def explicit_train_dev_test_split(
     dev_store = ZipKeyValueStore(dev_zip, locator=dev_locator, depends_on=deps)
     test_store = ZipKeyValueStore(test_zip, locator=test_locator, depends_on=deps)
     if downsample_to is None:
-        return (train_store, dev_store, test_store)
+        return DataSplit(train=train_store, dev=dev_store, test=test_store)
     else:
-        return (
-            downsample(
+        return DataSplit(
+            train=downsample(
                 train_store, limit=downsample_to, workflow_builder=workflow_builder
             ),
-            downsample(dev_store, limit=downsample_to, workflow_builder=workflow_builder),
-            downsample(
+            dev=downsample(
+                dev_store, limit=downsample_to, workflow_builder=workflow_builder
+            ),
+            test=downsample(
                 test_store, limit=downsample_to, workflow_builder=workflow_builder
             ),
         )
