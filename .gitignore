@@ -125,3 +125,4 @@ dmypy.json
 .pyre/
 
 .mypy_tmp
+/parameters/root.params
