@@ -21,6 +21,10 @@ class ResourceRequest(Protocol):
 
     Particular resource requests are implemented by cluster-specific sub-classes
     of `ResourceRequest`.
+
+    A ResourceRequest is applied to a job based on the target runtime location. For ISI-internal
+    a `SlurmResourceRequest` is provided. However one can use this as a base class to implement
+    a AWS or other cluster resource request system.
     """
 
     num_cpus: int
@@ -43,6 +47,11 @@ class ResourceRequest(Protocol):
 
     @staticmethod
     def from_parameters(params: Parameters) -> "ResourceRequest":
+        """
+        Create a ResourceRequest from a given parameter file
+
+        Current valid inputs: "slurm"
+        """
         backend = params.string(_BACKEND_PARAM, valid_options=["slurm"], default="slurm")
         if backend == "slurm":
             return SlurmResourceRequest.from_parameters(params)

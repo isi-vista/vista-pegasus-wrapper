@@ -213,6 +213,11 @@ def explicit_train_dev_test_split(
     downsample_to: Optional[int] = None,
     workflow_builder: WorkflowBuilder,
 ) -> DataSplit:
+    """
+    Explicit implementation for handling a train/dev/test split over a `KeyValueStore`
+
+    See `DataSplit` for the output description.
+    """
     train_locator = output_locator / "train"
     dev_locator = output_locator / "dev"
     test_locator = output_locator / "test"

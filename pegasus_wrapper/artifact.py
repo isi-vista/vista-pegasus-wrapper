@@ -97,6 +97,11 @@ _T = TypeVar("_T")
 class ValueArtifact(AbstractArtifact, Generic[_T]):
     """
     An artifact which wraps a single value.
+
+    If storing a file path to a ZIP store see `ZipKeyValueStore`
+
+    Useful for computation steps which produce a single file path.
+    The value must be one known ahead of time
     """
 
     value: _T = attrib()

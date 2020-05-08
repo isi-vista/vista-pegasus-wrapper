@@ -51,6 +51,9 @@ class WorkflowBuilder:
     )
 
     _job_graph: ADAG = attrib(init=False)
+    """
+    Pegasus' internal structure of the job requirements
+    """
     _signature_to_job: Dict[Any, DependencyNode] = attrib(init=False, factory=dict)
     """
     Occassionally an identical job may be scheduled multiple times

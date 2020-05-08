@@ -90,4 +90,5 @@ def build_submit_script(path: Path, dax_file: str, workflow_directory: Path) -> 
     path.write_text(
         SUBMIT_SCRIPT.format(workflow_directory=workflow_directory, dax_file=dax_file)
     )
+    # Designate the submit script as executable
     path.chmod(0o777)
