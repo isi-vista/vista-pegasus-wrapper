@@ -45,3 +45,5 @@ pegasus-run "path/to/output/dir/"exampleRun-001
 The example workflow submits **ONLY** to scavenge in an actual workflow we would recommend parameterizing it.
 
 Our current system places `ckpt` files to indicate that a job has finished in the event the DAX needs to be generated again to fix a bug after an issue was found. This system is non-comprehensive as it currently requires manual control. When submitting a new job using previous handles use a new relative dir in the plan and run.
+
+A [Nuke Checkpoints](scripts/nuke_checkpoints.py) script is provided for ease of removing checkpoint files. To use, pass a directory location as the launch parameter and the script will remove checkpoint files from the directory and all sub-directories.
