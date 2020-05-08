@@ -5,10 +5,10 @@ from attr.validators import instance_of, optional
 
 from immutablecollections import ImmutableSet, immutableset
 
-from Pegasus.DAX3 import Job
 from pegasus_wrapper.locator import Locator
 
 from more_itertools import collapse
+from Pegasus.DAX3 import Job
 from typing_extensions import Protocol
 
 
