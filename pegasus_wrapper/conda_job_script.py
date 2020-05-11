@@ -92,7 +92,7 @@ class CondaJobScriptGenerator:
         Returns the formatted CONDA_SCRIPT for the given python entry point.
 
         If `ckpt_path` is provided this script will generate a `check point` to allow
-        for future runs of the DAX to skip already generated outputs -- This can be useful
+        for future runs of the DAX to skip already generated outputs. This can be useful
         for outputs which are time or resource intensive or can be shared across projects.
         Examples: Running BERT on all of Gigaword or Converting RDF triples to FlexNLP documents
         """

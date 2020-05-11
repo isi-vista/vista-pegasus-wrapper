@@ -23,7 +23,7 @@ class ResourceRequest(Protocol):
 
     A ResourceRequest is applied to a job based on the target runtime location. For ISI-internal
     a `SlurmResourceRequest` is provided. However one can use this as a base class to implement
-    a AWS or other cluster resource request system.
+    an AWS or other cluster resource request system.
     """
 
     num_cpus: int
