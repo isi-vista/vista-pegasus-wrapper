@@ -49,7 +49,7 @@ class ResourceRequest(Protocol):
         """
         Create a ResourceRequest from a given parameter file
 
-        Current valid inputs: "slurm"
+        Current valid backend param values: "slurm"
         """
         backend = params.string(_BACKEND_PARAM, valid_options=["slurm"], default="slurm")
         if backend == "slurm":

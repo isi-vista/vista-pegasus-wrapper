@@ -9,18 +9,18 @@ from pegasus_wrapper.locator import Locator, _parse_parts
 from pegasus_wrapper.pegasus_utils import build_submit_script
 from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.workflow import WorkflowBuilder
-from scripts.multiply_by_x import main as multiply_by_x_main
-from scripts.sort_nums_in_file import main as sort_nums_main
+from scripts import multiply_by_x, sort_nums_in_file
 
 
 def example_workflow(params: Parameters):
     """
-    Example Workflow Creator for individuals to create a simple DAX and submit
-    to Pegasus for testing & learning purposes.
+    An example script to generate a workflow for submission to Pegasus.
     """
     tmp_path = params.creatable_directory("dir")
 
     # Generating parameters for initializing a workflow
+    # We recommend making workflow directory, site, and partition parameters
+    # in an research workflow
     workflow_params = Parameters.from_mapping(
         {
             "workflow_name": "Test",
@@ -43,44 +43,40 @@ def example_workflow(params: Parameters):
 
     random = Random()
     random.seed(0)
-    nums = immutableset(int(random.random() * 100) for _ in range(0, 25))
+    nums = [int(random.random() * 100) for _ in range(0, 25)]
 
     multiply_output_file = tmp_path / "multiplied_nums.txt"
     sorted_output_file = tmp_path / "sorted_nums.txt"
+
+    # Base Job Locator
+    job_locator = Locator(("jobs",))
 
     # Write a list of numbers out to be able to run the workflow
     with multiply_input_file.open("w") as mult_file:
         mult_file.writelines(f"{num}\n" for num in nums)
 
-    # Params for the multiply job
-    multiply_params = Parameters.from_mapping(
-        {"input_file": multiply_input_file, "ouput_file": multiply_output_file, "x": 4}
-    )
-    # Params for the sort job
-    sort_params = Parameters.from_mapping(
-        {"input_file": multiply_output_file, "output_file": sorted_output_file}
-    )
-
     resources = SlurmResourceRequest.from_parameters(slurm_params)
     workflow_builder = WorkflowBuilder.from_params(workflow_params)
 
-    multiply_job_name = Locator(_parse_parts("jobs/multiply"))
     multiply_artifact = ValueArtifact(
         multiply_output_file,
         depends_on=workflow_builder.run_python_on_parameters(
-            multiply_job_name, multiply_by_x_main, multiply_params, depends_on=[]
+            job_locator / "multiply",
+            multiply_by_x,
+            {
+                "input_file": multiply_input_file,
+                "ouput_file": multiply_output_file,
+                "x": 4,
+            },
+            depends_on=[],
         ),
         locator=Locator("multiply"),
     )
-    multiple_dir = workflow_builder.directory_for(multiply_job_name)
-    assert (multiple_dir / "___run.sh").exists()
-    assert (multiple_dir / "____params.params").exists()
 
-    sort_job_name = Locator(_parse_parts("jobs/sort"))
     workflow_builder.run_python_on_parameters(
-        sort_job_name,
-        sort_nums_main,
-        sort_params,
+        job_locator / "sort",
+        sort_nums_in_file,
+        {"input_file": multiply_output_file, "output_file": sorted_output_file},
         depends_on=[multiply_artifact],
         resource_request=resources,
     )

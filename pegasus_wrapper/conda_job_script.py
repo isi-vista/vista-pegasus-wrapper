@@ -39,8 +39,10 @@ class CondaJobScriptGenerator:
     in a conda virtual environment.
 
     The program takes a parameters file as input to generate the executable script.
-    The script can be used as an executable job for Pegasus so that a job can be
-    run in a venv as the default pegasus jobs do not run in one.
+    The script can be
+    used as an executable job for Pegasus
+    so that a job can be run in a venv
+    as the default pegasus jobs do not run in one.
 
     The generated script is based on
     https://github.com/isi-vista/saga-tools/blob/master/saga_tools/slurm_run_python.py
@@ -89,7 +91,8 @@ class CondaJobScriptGenerator:
         ckpt_path: Optional[Path] = None,
     ) -> str:
         """
-        Returns the formatted CONDA_SCRIPT for the given python entry point.
+        Returns the content of a shell script to run the given Python entry point
+        in a conda virtual environment according to params
 
         If `ckpt_path` is provided this script will generate a `check point` to allow
         for future runs of the DAX to skip already generated outputs. This can be useful

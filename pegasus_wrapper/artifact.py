@@ -1,3 +1,8 @@
+"""
+Some specialized artifacts already exist:
+* If storing a file path to a ZIP store see `ZipKeyValueStore`
+"""
+
 from typing import Generic, Optional, Sequence, TypeVar
 
 from attr import attrib, attrs
@@ -97,8 +102,6 @@ _T = TypeVar("_T")
 class ValueArtifact(AbstractArtifact, Generic[_T]):
     """
     An artifact which wraps a single value.
-
-    If storing a file path to a ZIP store see `ZipKeyValueStore`
 
     Useful for computation steps which produce a single file path.
     The wrapped value must be known at the time of workflow generation.
