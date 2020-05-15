@@ -89,8 +89,16 @@ class CondaJobScriptGenerator:
         *,
         working_directory: Path,
         ckpt_path: Optional[Path] = None,
-    ):
+    ) -> str:
+        """
+        Returns the content of a shell script to run the given Python entry point
+        in a conda virtual environment according to params
 
+        If `ckpt_path` is provided this script will generate a `check point` to allow
+        for future runs of the DAX to skip already generated outputs. This can be useful
+        for outputs which are time or resource intensive or can be shared across projects.
+        Examples: Running BERT on all of Gigaword or Converting RDF triples to FlexNLP documents
+        """
         return CONDA_SCRIPT.format(
             conda_lines=self.conda_config.sbatch_lines() if self.conda_config else "",
             spack_lines=self.spack_config.sbatch_lines() if self.spack_config else "",

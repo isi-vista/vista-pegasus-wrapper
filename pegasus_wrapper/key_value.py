@@ -166,6 +166,9 @@ def downsample(
     output_locator: Optional[Locator] = None,
     workflow_builder: WorkflowBuilder,
 ) -> KeyValueStore:
+    """
+    Convince function to run `vistautils.scripts.downsample_key_value_store` as a Pegasus Job
+    """
     if not output_locator:
         output_locator = input_store.locator / f"downsampled-{limit}"
     output_zip_path = workflow_builder.directory_for(output_locator) / "downsampled.zip"
@@ -213,6 +216,20 @@ def explicit_train_dev_test_split(
     downsample_to: Optional[int] = None,
     workflow_builder: WorkflowBuilder,
 ) -> DataSplit:
+    """
+    Explicit implementation for handling a train/dev/test split over a `KeyValueStore`
+
+    The split is done by a list of keys handed explicitly to the user.
+
+    If *exhaustive* is True then an exception will be thrown if a document does not get assigned to
+    one of the three sets. This is to help prevent accidental omissions in the key lists
+
+    *downsample_to* is an optional integer to reduce to the size of the key_value split
+    for quicker debugging. See `vistautils.scripts.downsample_key_value_store` as the function
+    which is
+
+    See `DataSplit` for the output description.
+    """
     train_locator = output_locator / "train"
     dev_locator = output_locator / "dev"
     test_locator = output_locator / "test"

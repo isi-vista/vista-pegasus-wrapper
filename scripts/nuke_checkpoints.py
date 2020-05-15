@@ -21,3 +21,5 @@ if __name__ == "__main__":
     for ckpt_file in root_dir.rglob("___ckpt"):
         print(f"Removing {ckpt_file}")
         ckpt_file.unlink()
+
+# Should we move this file to scripts?
