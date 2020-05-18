@@ -1,6 +1,7 @@
+import hashlib
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Set, Union
 
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
@@ -13,10 +14,14 @@ from pegasus_wrapper import resources
 from pegasus_wrapper.artifact import DependencyNode, _canonicalize_depends_on
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
 from pegasus_wrapper.locator import Locator
-from pegasus_wrapper.pegasus_utils import build_submit_script, path_to_pfn
+from pegasus_wrapper.pegasus_utils import (
+    build_submit_script,
+    path_to_pegasus_file,
+    path_to_pfn,
+)
 from pegasus_wrapper.resource_request import ResourceRequest
 
-from Pegasus.DAX3 import ADAG, Executable, Job
+from Pegasus.DAX3 import ADAG, Executable, File, Job, Link
 
 try:
     import importlib.resources as pkg_resources
@@ -61,6 +66,7 @@ class WorkflowBuilder:
     in the workflow graph. We compute this based on a job signature
     and only actually schedule the job once.
     """
+    _added_files: Set[File] = attrib(init=False, factory=set)
 
     # _graph: DiGraph = attrib(
     #     validator=instance_of(DiGraph), kw_only=True, default=DiGraph()
@@ -199,6 +205,8 @@ class WorkflowBuilder:
         for parent_dependency in depends_on:
             if parent_dependency.job:
                 self._job_graph.depends(job, parent_dependency.job)
+            for out_file in parent_dependency.output_files:
+                job.uses(out_file, link=Link.INPUT)
 
         if resource_request is not None:
             resource_request = self.default_resource_request.unify(resource_request)
@@ -209,7 +217,24 @@ class WorkflowBuilder:
             job, job_name=self._job_name_for(job_name), log_file=job_dir / "___stdout.log"
         )
 
-        dependency_node = DependencyNode.from_job(job)
+        # Handle Output Files
+        # This is currently only handled as the checkpoint file
+        # See: https://github.com/isi-vista/vista-pegasus-wrapper/issues/25
+        checkpoint_pegasus_file = path_to_pegasus_file(
+            checkpoint_path,
+            site=self._default_site,
+            name=f"ckpt-{hashlib.sha1(self._job_name_for(job_name).encode('UTF-8')).hexdigest()[:6]}",
+        )
+
+        if checkpoint_pegasus_file not in self._added_files:
+            self._job_graph.addFile(checkpoint_pegasus_file)
+            self._added_files.add(checkpoint_pegasus_file)
+
+        job.uses(checkpoint_pegasus_file, link=Link.OUTPUT, transfer=True)
+
+        dependency_node = DependencyNode.from_job(
+            job, output_files=[checkpoint_pegasus_file]
+        )
         self._signature_to_job[signature] = dependency_node
 
         logging.info("Scheduled Python job %s", job_name)

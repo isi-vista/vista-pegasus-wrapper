@@ -3,7 +3,7 @@ Some specialized artifacts already exist:
 * If storing a file path to a ZIP store see `ZipKeyValueStore`
 """
 
-from typing import Generic, Optional, Sequence, TypeVar
+from typing import Generic, Iterable, Optional, Sequence, TypeVar
 
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
@@ -13,7 +13,7 @@ from immutablecollections import ImmutableSet, immutableset
 from pegasus_wrapper.locator import Locator
 
 from more_itertools import collapse
-from Pegasus.DAX3 import Job
+from Pegasus.DAX3 import File, Job
 from typing_extensions import Protocol
 
 
@@ -27,10 +27,16 @@ class DependencyNode:
     """
 
     job: Optional[Job] = attrib(validator=optional(instance_of(Job)), kw_only=True)
+    output_files: ImmutableSet[File] = attrib(
+        validator=instance_of(ImmutableSet), kw_only=True
+    )
 
     @staticmethod
-    def from_job(job: Job) -> "DependencyNode":
-        return DependencyNode(job=job)
+    def from_job(job: Job, output_files: Optional[Iterable[File]]) -> "DependencyNode":
+        return DependencyNode(
+            job=job,
+            output_files=immutableset(output_files) if output_files else immutableset(),
+        )
 
     @staticmethod
     def already_done() -> "DependencyNode":
