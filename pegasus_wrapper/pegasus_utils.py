@@ -30,7 +30,7 @@ def path_to_pegasus_file(
 
     Files can be used for either an input or output of a Job.
     """
-    rtnr = File(path.stem + path.suffix if name is None else name)
+    rtnr = File(name if name else str(path.absolute()).replace("/", "-"))
     rtnr.addPFN(path_to_pfn(path, site=site))
     return rtnr
 

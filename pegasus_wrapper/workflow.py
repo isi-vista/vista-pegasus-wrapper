@@ -156,11 +156,12 @@ class WorkflowBuilder:
         job_dir = self.directory_for(job_name)
         checkpoint_path = job_dir / "___ckpt"
 
-        if checkpoint_path.exists():
-            logging.info(
-                "Skipping %s because checkpoint indicates it is complete", job_name
-            )
-            return DependencyNode.already_done()
+        # Not necessary with transition to pegasus files
+        # if checkpoint_path.exists():
+        #    logging.info(
+        #        "Skipping %s because checkpoint indicates it is complete", job_name
+        #    )
+        #    return DependencyNode.already_done()
 
         depends_on = _canonicalize_depends_on(depends_on)
         if isinstance(python_module, str):
