@@ -75,7 +75,7 @@ def test_dax_with_job_on_saga(tmp_path):
     with multiply_input_file.open("w") as mult_file:
         mult_file.writelines(f"{num}\n" for num in nums)
     multiply_params = Parameters.from_mapping(
-        {"input_file": multiply_input_file, "ouput_file": multiply_output_file, "x": 4}
+        {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
     )
     sort_params = Parameters.from_mapping(
         {"input_file": multiply_output_file, "output_file": sorted_output_file}
