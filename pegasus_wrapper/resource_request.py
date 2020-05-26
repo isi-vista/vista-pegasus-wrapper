@@ -1,3 +1,4 @@
+import logging
 from abc import abstractmethod
 from pathlib import Path
 from typing import Optional
@@ -79,6 +80,9 @@ class SlurmResourceRequest(ResourceRequest):
     num_gpus: Optional[int] = attrib(
         validator=optional(in_(Range.at_least(0))), default=None, kw_only=True
     )
+    job_time: Optional[str] = attrib(
+        validator=optional(instance_of(str)), default="1:00:00", kw_only=True
+    )
 
     @staticmethod
     def from_parameters(params: Parameters) -> ResourceRequest:
@@ -89,6 +93,7 @@ class SlurmResourceRequest(ResourceRequest):
             memory=MemoryAmount.parse(params.string("memory"))
             if "memory" in params
             else None,
+            job_time=params.optional_string("job_time"),
         )
 
     def unify(self, other: ResourceRequest) -> ResourceRequest:
@@ -123,6 +128,10 @@ class SlurmResourceRequest(ResourceRequest):
                 self.memory if self.memory else _SLURM_DEFAULT_MEMORY
             ),
             stdout_log_path=log_file,
+            time=self.job_time,
+        )
+        logging.info(
+            "Slurm Resource Request for %s: %s", job_name, slurm_resource_content
         )
         job.addProfile(
             Profile(Namespace.PEGASUS, "glite.arguments", slurm_resource_content)
@@ -131,5 +140,5 @@ class SlurmResourceRequest(ResourceRequest):
 
 SLURM_RESOURCE_STRING = """--{qos_or_account} --partition {partition} --ntasks 1
  --cpus-per-task {num_cpus} --gpus-per-task {num_gpus} --job-name {job_name} --mem {mem_str}
- --output={stdout_log_path}"""
+ --output={stdout_log_path} --time {time}"""
 _BACKEND_PARAM = "backend"
