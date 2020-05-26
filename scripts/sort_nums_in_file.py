@@ -1,4 +1,5 @@
 # This script is for testing purposes only
+import time
 
 from immutablecollections import immutableset
 from vistautils.parameters import Parameters
@@ -13,7 +14,9 @@ def main(params: Parameters):
 
     nums.sort()
 
-    output_file_path.write_text("\n".join(immutableset(nums)))
+    time.sleep(60)
+
+    output_file_path.write_text("\n".join(f"{n}" for n in immutableset(nums)))
 
 
 if __name__ == "__main__":
