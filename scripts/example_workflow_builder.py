@@ -85,18 +85,11 @@ def example_workflow(params: Parameters):
     )
 
     # Generate the Pegasus DAX file
-    dax_file = workflow_builder.write_dax_to_dir(tmp_path)
-
-    submit_script = tmp_path / "submit_script.sh"
-
-    # Our attempt at an easy submit file, it MAY NOT be accurate for more complicated workflows but it
+    # We attempt to build at an easy submit file,
+    # it MAY NOT be accurate for more complicated workflows but it
     # does work for this simple example.
     # See https://github.com/isi-vista/vista-pegasus-wrapper/issues/27
-    build_submit_script(
-        submit_script,
-        str(dax_file),
-        workflow_builder._workflow_directory,  # pylint:disable=protected-access
-    )
+    workflow_builder.write_dax_to_dir(tmp_path)
 
 
 if __name__ == "__main__":

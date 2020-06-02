@@ -21,7 +21,7 @@ pegasus-plan \\
 
 
 def path_to_pegasus_file(
-    path: Path, *, site: str = "local", name: Optional[str] = None
+    path: Path, *, site: str = "local", name: Optional[str] = None, is_raw_input: bool = False
 ) -> File:
     """
     Given a *path* object return a pegasus `File` for usage in a workflow
@@ -31,7 +31,8 @@ def path_to_pegasus_file(
     Files can be used for either an input or output of a Job.
     """
     rtnr = File(name if name else str(path.absolute()).replace("/", "-"))
-    rtnr.addPFN(path_to_pfn(path, site=site))
+    if is_raw_input:
+        rtnr.addPFN(path_to_pfn(path, site=site))
     return rtnr
 
 

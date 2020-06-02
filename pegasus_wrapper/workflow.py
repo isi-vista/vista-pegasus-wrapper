@@ -155,6 +155,7 @@ class WorkflowBuilder:
         """
         job_dir = self.directory_for(job_name)
         checkpoint_path = job_dir / "___ckpt"
+        chpt_name = job_name / "__ckpt"
 
         # Not necessary with transition to pegasus files
         # if checkpoint_path.exists():
@@ -224,7 +225,7 @@ class WorkflowBuilder:
         checkpoint_pegasus_file = path_to_pegasus_file(
             checkpoint_path,
             site=self._default_site,
-            name=f"ckpt-{hashlib.sha1(self._job_name_for(job_name).encode('UTF-8')).hexdigest()[:6]}",
+            name=f"{chpt_name}".replace("/", "_"),
         )
 
         if checkpoint_pegasus_file not in self._added_files:
