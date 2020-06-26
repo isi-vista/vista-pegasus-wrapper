@@ -25,7 +25,7 @@ setup(
         "importlib-resources==1.4.0",
 	"vistautils>=0.21.0"
     ],
-    scripts=['scripts/multiply_by_x.py', 'scripts/sort_nums_in_file.py', 'scripts/nuke_checkpoints'],
+    scripts=['scripts/multiply_by_x.py', 'scripts/sort_nums_in_file.py', 'scripts/nuke_checkpoints.py'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
