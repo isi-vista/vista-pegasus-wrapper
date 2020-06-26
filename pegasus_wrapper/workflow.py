@@ -46,16 +46,15 @@ class WorkflowBuilder:
     created_by: str = attrib(validator=instance_of(str), kw_only=True)
     _workflow_directory: Path = attrib(validator=instance_of(Path), kw_only=True)
     _namespace: str = attrib(validator=instance_of(str), kw_only=True)
+    _default_site: str = attrib(validator=instance_of(str), kw_only=True)
+    default_resource_request: ResourceRequest = attrib(
+        validator=instance_of(ResourceRequest), kw_only=True
+    )
     _conda_script_generator: Optional[CondaJobScriptGenerator] = attrib(
         validator=optional(instance_of(CondaJobScriptGenerator)),
         default=None,
         kw_only=True,
     )
-    _default_site: str = attrib(validator=instance_of(str), kw_only=True)
-    default_resource_request: ResourceRequest = attrib(
-        validator=instance_of(ResourceRequest), kw_only=True
-    )
-
     _job_graph: ADAG = attrib(init=False)
     """
     Pegasus' internal structure of the job requirements
@@ -154,8 +153,9 @@ class WorkflowBuilder:
         for future jobs.
         """
         job_dir = self.directory_for(job_name)
-        checkpoint_path = job_dir / "___ckpt"
-        chpt_name = job_name / "__ckpt"
+        ckpt_name = job_name / "___ckpt"
+        checkpoint_path = self.directory_for(ckpt_name)
+
 
         # Not necessary with transition to pegasus files
         # if checkpoint_path.exists():
@@ -225,7 +225,7 @@ class WorkflowBuilder:
         checkpoint_pegasus_file = path_to_pegasus_file(
             checkpoint_path,
             site=self._default_site,
-            name=f"{chpt_name}".replace("/", "_"),
+            name=f"{ckpt_name}",
         )
 
         if checkpoint_pegasus_file not in self._added_files:
