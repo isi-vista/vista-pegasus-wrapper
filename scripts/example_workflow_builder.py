@@ -31,7 +31,9 @@ def example_workflow(params: Parameters):
             "namespace": "test",
             "partition": "scavenge",
             "conda_environment": params.string("conda_environment"),
-            "conda_base_path": str(params.existing_directory("conda_base_path").absolute()),
+            "conda_base_path": str(
+                params.existing_directory("conda_base_path").absolute()
+            ),
         }
     )
 

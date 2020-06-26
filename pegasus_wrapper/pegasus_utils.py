@@ -21,7 +21,11 @@ pegasus-plan \\
 
 
 def path_to_pegasus_file(
-    path: Path, *, site: str = "local", name: Optional[str] = None, is_raw_input: bool = False
+    path: Path,
+    *,
+    site: str = "local",
+    name: Optional[str] = None,
+    is_raw_input: bool = False
 ) -> File:
     """
     Given a *path* object return a pegasus `File` for usage in a workflow

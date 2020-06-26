@@ -1,4 +1,3 @@
-import hashlib
 import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Set, Union
@@ -156,7 +155,6 @@ class WorkflowBuilder:
         ckpt_name = job_name / "___ckpt"
         checkpoint_path = self.directory_for(ckpt_name)
 
-
         # Not necessary with transition to pegasus files
         # if checkpoint_path.exists():
         #    logging.info(
@@ -223,9 +221,7 @@ class WorkflowBuilder:
         # This is currently only handled as the checkpoint file
         # See: https://github.com/isi-vista/vista-pegasus-wrapper/issues/25
         checkpoint_pegasus_file = path_to_pegasus_file(
-            checkpoint_path,
-            site=self._default_site,
-            name=f"{ckpt_name}",
+            checkpoint_path, site=self._default_site, name=f"{ckpt_name}"
         )
 
         if checkpoint_pegasus_file not in self._added_files:
