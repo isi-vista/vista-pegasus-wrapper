@@ -132,5 +132,5 @@ class SlurmResourceRequest(ResourceRequest):
 
 SLURM_RESOURCE_STRING = """--{qos_or_account} --partition {partition} --ntasks 1
  --cpus-per-task {num_cpus} --gpus-per-task {num_gpus} --job-name {job_name} --mem {mem_str}
-"""
+ --output={stdout_log_path}"""
 _BACKEND_PARAM = "backend"
