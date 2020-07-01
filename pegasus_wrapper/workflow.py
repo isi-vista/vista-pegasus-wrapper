@@ -1,3 +1,9 @@
+"""
+Core workflow management classes for the Vista Pegasus wrapper.
+
+The user should typically not refer to these classes directly
+and should instead use the methods in the root of the package.
+"""
 import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Union

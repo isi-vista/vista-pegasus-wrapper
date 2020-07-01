@@ -1,14 +1,18 @@
 from random import Random
 
-from immutablecollections import immutableset
 from vistautils.parameters import Parameters
 from vistautils.parameters_only_entrypoint import parameters_only_entry_point
 
+from pegasus_wrapper import (
+    experiment_directory,
+    initialize_vista_pegasus_wrapper,
+    run_python_on_parameters,
+    write_dax_to_dir,
+)
 from pegasus_wrapper.artifact import ValueArtifact
-from pegasus_wrapper.locator import Locator, _parse_parts
+from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.pegasus_utils import build_submit_script
 from pegasus_wrapper.resource_request import SlurmResourceRequest
-from pegasus_wrapper.workflow import WorkflowBuilder
 from scripts import multiply_by_x, sort_nums_in_file
 
 
@@ -56,11 +60,11 @@ def example_workflow(params: Parameters):
         mult_file.writelines(f"{num}\n" for num in nums)
 
     resources = SlurmResourceRequest.from_parameters(slurm_params)
-    workflow_builder = WorkflowBuilder.from_params(workflow_params)
+    initialize_vista_pegasus_wrapper(workflow_params)
 
     multiply_artifact = ValueArtifact(
         multiply_output_file,
-        depends_on=workflow_builder.run_python_on_parameters(
+        depends_on=run_python_on_parameters(
             job_locator / "multiply",
             multiply_by_x,
             {
@@ -73,7 +77,7 @@ def example_workflow(params: Parameters):
         locator=Locator("multiply"),
     )
 
-    workflow_builder.run_python_on_parameters(
+    run_python_on_parameters(
         job_locator / "sort",
         sort_nums_in_file,
         {"input_file": multiply_output_file, "output_file": sorted_output_file},
@@ -82,7 +86,7 @@ def example_workflow(params: Parameters):
     )
 
     # Generate the Pegasus DAX file
-    dax_file = workflow_builder.write_dax_to_dir(tmp_path)
+    dax_file = write_dax_to_dir(tmp_path)
 
     submit_script = tmp_path / "submit_script.sh"
 
@@ -92,7 +96,7 @@ def example_workflow(params: Parameters):
     build_submit_script(
         submit_script,
         str(dax_file),
-        workflow_builder._workflow_directory,  # pylint:disable=protected-access
+        experiment_directory(),  # pylint:disable=protected-access
     )
 
 
