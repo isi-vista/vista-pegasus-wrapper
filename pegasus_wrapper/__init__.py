@@ -85,7 +85,7 @@ def default_conda_configuration() -> CondaConfiguration:
     return _SINGLETON_WORKFLOW_BUILDER.default_conda_configuration()
 
 
-def write_dax_to_dir(output_xml_dir: Optional[Path] = None) -> Path:
+def write_workflow_description(output_xml_dir: Optional[Path] = None) -> Path:
     _assert_singleton_workflow_builder()
     return _SINGLETON_WORKFLOW_BUILDER.write_dax_to_dir(output_xml_dir)
 

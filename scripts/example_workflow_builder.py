@@ -7,7 +7,7 @@ from pegasus_wrapper import (
     experiment_directory,
     initialize_vista_pegasus_wrapper,
     run_python_on_parameters,
-    write_dax_to_dir,
+    write_workflow_description,
 )
 from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator
@@ -86,7 +86,7 @@ def example_workflow(params: Parameters):
     )
 
     # Generate the Pegasus DAX file
-    dax_file = write_dax_to_dir(tmp_path)
+    dax_file = write_workflow_description(tmp_path)
 
     submit_script = tmp_path / "submit_script.sh"
 
