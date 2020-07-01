@@ -9,14 +9,14 @@ from vistautils.class_utils import fully_qualified_name
 from vistautils.io_utils import CharSink
 from vistautils.parameters import Parameters, YAMLParametersWriter
 
+from Pegasus.DAX3 import ADAG, Executable, Job
 from pegasus_wrapper import resources
 from pegasus_wrapper.artifact import DependencyNode, _canonicalize_depends_on
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
 from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.pegasus_utils import build_submit_script, path_to_pfn
 from pegasus_wrapper.resource_request import ResourceRequest
-
-from Pegasus.DAX3 import ADAG, Executable, Job
+from saga_tools.conda import CondaConfiguration
 
 try:
     import importlib.resources as pkg_resources
@@ -137,6 +137,7 @@ class WorkflowBuilder:
         *,
         depends_on,
         resource_request: Optional[ResourceRequest] = None,
+        override_conda_config: Optional[CondaConfiguration] = None,
     ) -> DependencyNode:
         """
         Schedule a job to run the given *python_module* on the given *parameters*.
@@ -183,6 +184,7 @@ class WorkflowBuilder:
             script_path=script_path,
             params_path=job_dir / "____params.params",
             ckpt_path=checkpoint_path,
+            override_conda_config=override_conda_config,
         )
         script_executable = Executable(
             namespace=self._namespace,
@@ -293,6 +295,9 @@ class WorkflowBuilder:
         )
 
         return dax_file
+
+    def default_conda_configuration(self) -> CondaConfiguration:
+        return self._conda_script_generator.conda_config
 
     # def get_job_inputs(self, job: Job) -> ImmutableSet[File]:
     #     return immutableset(

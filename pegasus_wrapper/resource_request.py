@@ -11,6 +11,7 @@ from vistautils.range import Range
 
 from Pegasus.DAX3 import Job, Namespace, Profile
 from saga_tools.slurm import to_slurm_memory_string
+
 from typing_extensions import Protocol
 
 
@@ -131,5 +132,5 @@ class SlurmResourceRequest(ResourceRequest):
 
 SLURM_RESOURCE_STRING = """--{qos_or_account} --partition {partition} --ntasks 1
  --cpus-per-task {num_cpus} --gpus-per-task {num_gpus} --job-name {job_name} --mem {mem_str}
- --output={stdout_log_path}"""
+"""
 _BACKEND_PARAM = "backend"
