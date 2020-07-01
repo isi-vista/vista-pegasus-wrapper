@@ -26,16 +26,16 @@ from pegasus_wrapper.version import version as __version__  # noqa
 from pegasus_wrapper.workflow import WorkflowBuilder
 from saga_tools.conda import CondaConfiguration
 
-SINGLETON_WORKFLOW_BUILDER: WorkflowBuilder = None  # type: ignore
+_SINGLETON_WORKFLOW_BUILDER: WorkflowBuilder = None  # type: ignore
 
 
 def initialize_vista_pegasus_wrapper(parameters: Parameters) -> None:
-    global SINGLETON_WORKFLOW_BUILDER  # pylint:disable=global-statement
-    SINGLETON_WORKFLOW_BUILDER = WorkflowBuilder.from_params(parameters)
+    global _SINGLETON_WORKFLOW_BUILDER  # pylint:disable=global-statement
+    _SINGLETON_WORKFLOW_BUILDER = WorkflowBuilder.from_params(parameters)
 
 
 def _assert_singleton_workflow_builder() -> None:
-    if not SINGLETON_WORKFLOW_BUILDER:
+    if not _SINGLETON_WORKFLOW_BUILDER:
         raise RuntimeError(
             "You must call initialize_vista_pegasus_wrapper(params) "
             "before calling any other wrapper functions."
@@ -48,7 +48,7 @@ def directory_for(locator: Locator) -> Path:
     for a job with the given `Locator`.
     """
     _assert_singleton_workflow_builder()
-    return SINGLETON_WORKFLOW_BUILDER.directory_for(locator)
+    return _SINGLETON_WORKFLOW_BUILDER.directory_for(locator)
 
 
 def run_python_on_parameters(
@@ -70,7 +70,7 @@ def run_python_on_parameters(
     for future jobs.
     """
     _assert_singleton_workflow_builder()
-    return SINGLETON_WORKFLOW_BUILDER.run_python_on_parameters(
+    return _SINGLETON_WORKFLOW_BUILDER.run_python_on_parameters(
         job_name=job_name,
         python_module=python_module,
         parameters=parameters,
@@ -82,12 +82,12 @@ def run_python_on_parameters(
 
 def default_conda_configuration() -> CondaConfiguration:
     _assert_singleton_workflow_builder()
-    return SINGLETON_WORKFLOW_BUILDER.default_conda_configuration()
+    return _SINGLETON_WORKFLOW_BUILDER.default_conda_configuration()
 
 
 def write_dax_to_dir(output_xml_dir: Optional[Path] = None) -> Path:
     _assert_singleton_workflow_builder()
-    return SINGLETON_WORKFLOW_BUILDER.write_dax_to_dir(output_xml_dir)
+    return _SINGLETON_WORKFLOW_BUILDER.write_dax_to_dir(output_xml_dir)
 
 
 def experiment_directory() -> Path:
@@ -97,5 +97,5 @@ def experiment_directory() -> Path:
     """
     _assert_singleton_workflow_builder()
     return (
-        SINGLETON_WORKFLOW_BUILDER._workflow_directory  # pylint:disable=protected-access
+        _SINGLETON_WORKFLOW_BUILDER._workflow_directory  # pylint:disable=protected-access
     )
