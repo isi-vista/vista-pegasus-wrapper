@@ -16,7 +16,7 @@ def main(params: Parameters):
 
     nums.sort()
 
-    time.sleep(60)
+    # time.sleep(60)
 
     logging.info("Writing to output file: %s", str(input_file_path.absolute()))
     output_file_path.write_text("\n".join(f"{n}" for n in immutableset(nums)))

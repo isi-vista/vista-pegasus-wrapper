@@ -17,7 +17,7 @@ def main(params: Parameters):
                 output_file.write(f"{int(num)*x}\n")
 
     logging.info("Writing to output file: %s", str(input_file_path.absolute()))
-    time.sleep(60)
+    # time.sleep(60)
 
 
 if __name__ == "__main__":

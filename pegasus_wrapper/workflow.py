@@ -66,6 +66,15 @@ class WorkflowBuilder:
     """
     _added_files: Set[File] = attrib(init=False, factory=set)
 
+    _replica_catalog: Path = attrib(init=False)
+
+    def __attrs_post_init__(self) -> None:
+        replica_catalog_path = self._workflow_directory / "rc.dat"
+        replica_catalog_path.touch(mode=0o744)
+        object.__setattr__(self, "_replica_catalog", replica_catalog_path)
+
+        # self._job_graph.addFile(File(self._replica_catalog, ))
+
     # _graph: DiGraph = attrib(
     #     validator=instance_of(DiGraph), kw_only=True, default=DiGraph()
     # )
@@ -155,13 +164,6 @@ class WorkflowBuilder:
         ckpt_name = job_name / "___ckpt"
         checkpoint_path = self.directory_for(ckpt_name)
 
-        # Not necessary with transition to pegasus files
-        # if checkpoint_path.exists():
-        #    logging.info(
-        #        "Skipping %s because checkpoint indicates it is complete", job_name
-        #    )
-        #    return DependencyNode.already_done()
-
         depends_on = _canonicalize_depends_on(depends_on)
         if isinstance(python_module, str):
             fully_qualified_module_name = python_module
@@ -227,6 +229,10 @@ class WorkflowBuilder:
         if checkpoint_pegasus_file not in self._added_files:
             self._job_graph.addFile(checkpoint_pegasus_file)
             self._added_files.add(checkpoint_pegasus_file)
+        
+        if checkpoint_path.exists():
+            with self._replica_catalog.open("w") as handle:
+                handle.write(f"{ckpt_name} file://{checkpoint_path} site='local'")
 
         job.uses(checkpoint_pegasus_file, link=Link.OUTPUT, transfer=True)
 
