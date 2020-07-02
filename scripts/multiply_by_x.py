@@ -7,8 +7,9 @@ def main(params: Parameters):
     input_file_path = params.existing_file("input_file")
     output_file_path = params.creatable_file("output_file")
     x = params.integer("x")
+    print("Checkpoint #1: ***>")
     with input_file_path.open() as input_file:
-        with output_file_path.open() as output_file:
+        with output_file_path.open('w') as output_file:
             for num in input_file:
                 output_file.write(f"{num*x}\n")
 

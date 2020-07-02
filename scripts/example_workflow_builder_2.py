@@ -9,7 +9,7 @@ from pegasus_wrapper.locator import Locator, _parse_parts
 from pegasus_wrapper.pegasus_utils import build_submit_script
 from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.workflow import WorkflowBuilder
-import multiply_by_x, sort_nums_in_file
+from pegasus_wrapper.scripts import multiply_by_x, sort_nums_in_file
 
 
 def example_workflow(params: Parameters):
@@ -23,7 +23,7 @@ def example_workflow(params: Parameters):
     # in an research workflow
     workflow_params = Parameters.from_mapping(
         {
-            "workflow_name": "Test2",
+            "workflow_name": "Test3",
             "workflow_created": "Testing",
             "workflow_log_dir": str(tmp_path / "log"),
             "workflow_directory": str(tmp_path / "working"),
@@ -48,7 +48,6 @@ def example_workflow(params: Parameters):
     nums = [int(random.random() * 100) for _ in range(0, 25)]
 
     multiply_output_file = tmp_path / "multiplied_nums.txt"
-    sorted_output_file = tmp_path / "sorted_nums.txt"
 
     # Base Job Locator
     job_locator = Locator(("jobs",))
@@ -60,27 +59,13 @@ def example_workflow(params: Parameters):
     resources = SlurmResourceRequest.from_parameters(slurm_params)
     workflow_builder = WorkflowBuilder.from_params(workflow_params)
 
-    multiply_artifact = ValueArtifact(
-        multiply_output_file,
-        depends_on=workflow_builder.run_python_on_parameters(
-            job_locator / "multiply",
-            multiply_by_x,
-            {
-                "input_file": multiply_input_file,
-                "output_file": multiply_output_file,
-                "x": 4,
-            },
-            depends_on=[],
-        ),
-        locator=Locator("multiply"),
-    )
 
     workflow_builder.run_python_on_parameters(
-        job_locator / "sort",
-        sort_nums_in_file,
-        {"input_file": multiply_output_file, "output_file": sorted_output_file},
-        depends_on=[multiply_artifact],
-        #resource_request=resources,
+        job_locator / "multiply",
+        multiply_by_x,
+        {"input_file": multiply_input_file, "output_file": multiply_output_file},
+        depends_on=[],
+        resource_request=resources,
     )
 
     # Generate the Pegasus DAX file
