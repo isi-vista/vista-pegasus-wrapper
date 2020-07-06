@@ -15,6 +15,7 @@ from pegasus_wrapper.pegasus_utils import build_submit_script
 from pegasus_wrapper.resource_request import SlurmResourceRequest
 from scripts import multiply_by_x, sort_nums_in_file
 
+
 def example_workflow(params: Parameters):
     """
     An example script to generate a workflow for submission to Pegasus.
