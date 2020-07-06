@@ -9,9 +9,9 @@ from vistautils.parameters import Parameters
 from vistautils.scripts import downsample_key_value_store, join_key_value_stores
 from vistautils.scripts import split_key_value_store as split_entry_point
 
+from pegasus_wrapper import directory_for, run_python_on_parameters
 from pegasus_wrapper.artifact import AbstractArtifact, Artifact, ValueArtifact
 from pegasus_wrapper.locator import Locator
-from pegasus_wrapper.workflow import WorkflowBuilder
 
 from typing_extensions import Protocol
 
@@ -61,11 +61,7 @@ class KeyValueTransform(Protocol):
     """
 
     def __call__(
-        self,
-        input_zip: KeyValueStore,
-        *,
-        workflow_builder: WorkflowBuilder,
-        output_locator: Optional[Locator] = None,
+        self, input_zip: KeyValueStore, *, output_locator: Optional[Locator] = None
     ) -> KeyValueStore:
         """
         A function which adds jobs to *workflow_builder* to transform *input_zip*
@@ -78,11 +74,7 @@ class _ComposedKeyValueTransform(KeyValueTransform):
     transforms: Tuple[KeyValueTransform, ...] = attrib(converter=_to_tuple)
 
     def __call__(
-        self,
-        input_zip: KeyValueStore,
-        *,
-        workflow_builder: WorkflowBuilder,
-        output_locator: Optional[Locator] = None,
+        self, input_zip: KeyValueStore, *, output_locator: Optional[Locator] = None
     ) -> KeyValueStore:
         final_transform = self.transforms[-1]
         cur_value = input_zip
@@ -91,11 +83,7 @@ class _ComposedKeyValueTransform(KeyValueTransform):
                 step_output_locator = output_locator
             else:
                 step_output_locator = None
-            cur_value = transform(
-                cur_value,
-                workflow_builder=workflow_builder,
-                output_locator=step_output_locator,
-            )
+            cur_value = transform(cur_value, output_locator=step_output_locator)
         return cur_value
 
     def __attrs_post_init__(self) -> None:
@@ -110,7 +98,7 @@ def compose_key_value_store_transforms(
 
 
 def split_key_value_store(
-    input_store: KeyValueStore, *, num_parts: int, workflow_builder: WorkflowBuilder
+    input_store: KeyValueStore, *, num_parts: int
 ) -> Tuple[KeyValueStore]:
     """
     Splits *input_store* into *num_parts* pieces of nearly equal size.
@@ -121,8 +109,8 @@ def split_key_value_store(
         raise RuntimeError("Number of parts must be positive")
 
     split_locator = input_store.locator / "split"
-    split_output_dir = workflow_builder.directory_for(split_locator)
-    split_job = workflow_builder.run_python_on_parameters(
+    split_output_dir = directory_for(split_locator)
+    split_job = run_python_on_parameters(
         split_locator,
         split_entry_point,
         Parameters.from_mapping(
@@ -145,14 +133,11 @@ def split_key_value_store(
 
 
 def join_to_key_value_zip(
-    key_value_zips_to_join: Iterable[ZipKeyValueStore],
-    *,
-    output_locator: Locator,
-    workflow_builder: WorkflowBuilder,
+    key_value_zips_to_join: Iterable[ZipKeyValueStore], *, output_locator: Locator
 ) -> ZipKeyValueStore:
     key_value_zips_to_join = tuple(key_value_zips_to_join)
-    output_zip_path = workflow_builder.directory_for(output_locator) / "joined.zip"
-    join_job = workflow_builder.run_python_on_parameters(
+    output_zip_path = directory_for(output_locator) / "joined.zip"
+    join_job = run_python_on_parameters(
         output_locator,
         join_key_value_stores,
         Parameters.from_mapping(
@@ -173,43 +158,33 @@ def transform_key_value_store(
     transform: KeyValueTransform,
     *,
     output_locator: Locator,
-    workflow_builder: WorkflowBuilder,
     parallelism: int,
 ) -> KeyValueStore:
     if parallelism > 1:
         return join_to_key_value_zip(
             [
-                transform(split, workflow_builder=workflow_builder)
-                for split in split_key_value_store(
-                    input_store, num_parts=parallelism, workflow_builder=workflow_builder
-                )
+                transform(split)
+                for split in split_key_value_store(input_store, num_parts=parallelism)
             ],
             output_locator=output_locator,
-            workflow_builder=workflow_builder,
         )
     elif parallelism == 1:
         # Not need for split/join overhead if there is no parallelism
-        return transform(
-            input_store, workflow_builder=workflow_builder, output_locator=output_locator
-        )
+        return transform(input_store, output_locator=output_locator)
     else:
         raise RuntimeError(f"Parallelism must be positive but got {parallelism}")
 
 
 def downsample(
-    input_store: KeyValueStore,
-    *,
-    limit: int,
-    output_locator: Optional[Locator] = None,
-    workflow_builder: WorkflowBuilder,
+    input_store: KeyValueStore, *, limit: int, output_locator: Optional[Locator] = None
 ) -> KeyValueStore:
     """
     Convince function to run `vistautils.scripts.downsample_key_value_store` as a Pegasus Job
     """
     if not output_locator:
         output_locator = input_store.locator / f"downsampled-{limit}"
-    output_zip_path = workflow_builder.directory_for(output_locator) / "downsampled.zip"
-    downsample_job = workflow_builder.run_python_on_parameters(
+    output_zip_path = directory_for(output_locator) / "downsampled.zip"
+    downsample_job = run_python_on_parameters(
         output_locator,
         downsample_key_value_store,
         Parameters.from_mapping(
@@ -251,7 +226,6 @@ def explicit_train_dev_test_split(
     output_locator: Locator,
     exhaustive: bool = True,
     downsample_to: Optional[int] = None,
-    workflow_builder: WorkflowBuilder,
 ) -> DataSplit:
     """
     Explicit implementation for handling a train/dev/test split over a `KeyValueStore`
@@ -271,11 +245,11 @@ def explicit_train_dev_test_split(
     dev_locator = output_locator / "dev"
     test_locator = output_locator / "test"
 
-    train_zip = workflow_builder.directory_for(train_locator) / "train.zip"
-    dev_zip = workflow_builder.directory_for(dev_locator) / "dev.zip"
-    test_zip = workflow_builder.directory_for(test_locator) / "test.zip"
+    train_zip = directory_for(train_locator) / "train.zip"
+    dev_zip = directory_for(dev_locator) / "dev.zip"
+    test_zip = directory_for(test_locator) / "test.zip"
 
-    split_job = workflow_builder.run_python_on_parameters(
+    split_job = run_python_on_parameters(
         output_locator,
         split_entry_point,
         parameters={
@@ -305,13 +279,7 @@ def explicit_train_dev_test_split(
         return DataSplit(train=train_store, dev=dev_store, test=test_store)
     else:
         return DataSplit(
-            train=downsample(
-                train_store, limit=downsample_to, workflow_builder=workflow_builder
-            ),
-            dev=downsample(
-                dev_store, limit=downsample_to, workflow_builder=workflow_builder
-            ),
-            test=downsample(
-                test_store, limit=downsample_to, workflow_builder=workflow_builder
-            ),
+            train=downsample(train_store, limit=downsample_to),
+            dev=downsample(dev_store, limit=downsample_to),
+            test=downsample(test_store, limit=downsample_to),
         )
