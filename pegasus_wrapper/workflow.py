@@ -69,7 +69,12 @@ class WorkflowBuilder:
     _replica_catalog: Path = attrib(init=False)
 
     def __attrs_post_init__(self) -> None:
+        # Do I need to check if it exists already? Or will users manually remove
+        # 'working' dir before rerunning?
         replica_catalog_path = self._workflow_directory / "rc.dat"
+        if replica_catalog_path.exists():
+            replica_catalog_path.unlink()
+
         replica_catalog_path.touch(mode=0o744)
         object.__setattr__(self, "_replica_catalog", replica_catalog_path)
 
@@ -162,7 +167,7 @@ class WorkflowBuilder:
         """
         job_dir = self.directory_for(job_name)
         ckpt_name = job_name / "___ckpt"
-        checkpoint_path = self.directory_for(ckpt_name)
+        checkpoint_path = job_dir / "___ckpt"
 
         depends_on = _canonicalize_depends_on(depends_on)
         if isinstance(python_module, str):
@@ -229,10 +234,10 @@ class WorkflowBuilder:
         if checkpoint_pegasus_file not in self._added_files:
             self._job_graph.addFile(checkpoint_pegasus_file)
             self._added_files.add(checkpoint_pegasus_file)
-        
+
         if checkpoint_path.exists():
-            with self._replica_catalog.open("w") as handle:
-                handle.write(f"{ckpt_name} file://{checkpoint_path} site='local'")
+            with self._replica_catalog.open("a+") as handle:
+                handle.write(f"{ckpt_name} file://{checkpoint_path} site={self._default_site}\n")
 
         job.uses(checkpoint_pegasus_file, link=Link.OUTPUT, transfer=True)
 

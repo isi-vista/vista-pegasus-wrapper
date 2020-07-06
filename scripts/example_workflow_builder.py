@@ -1,12 +1,10 @@
 from random import Random
 
-from immutablecollections import immutableset
 from vistautils.parameters import Parameters
 from vistautils.parameters_only_entrypoint import parameters_only_entry_point
 
 from pegasus_wrapper.artifact import ValueArtifact
-from pegasus_wrapper.locator import Locator, _parse_parts
-from pegasus_wrapper.pegasus_utils import build_submit_script
+from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.workflow import WorkflowBuilder
 from scripts import multiply_by_x, sort_nums_in_file
