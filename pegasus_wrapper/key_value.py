@@ -1,9 +1,10 @@
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Optional, Tuple
+from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple
 
 from attr import attrib, attrs
 from attr.validators import instance_of
 
+from immutablecollections.converter_utils import _to_tuple
 from vistautils.parameters import Parameters
 from vistautils.scripts import downsample_key_value_store, join_key_value_stores
 from vistautils.scripts import split_key_value_store as split_entry_point
@@ -70,6 +71,42 @@ class KeyValueTransform(Protocol):
         A function which adds jobs to *workflow_builder* to transform *input_zip*
         into another `KeyValueZip`.
         """
+
+
+@attrs(frozen=True)
+class _ComposedKeyValueTransform(KeyValueTransform):
+    transforms: Tuple[KeyValueTransform, ...] = attrib(converter=_to_tuple)
+
+    def __call__(
+        self,
+        input_zip: KeyValueStore,
+        *,
+        workflow_builder: WorkflowBuilder,
+        output_locator: Optional[Locator] = None,
+    ) -> KeyValueStore:
+        final_transform = self.transforms[-1]
+        cur_value = input_zip
+        for transform in self.transforms:
+            if transform is final_transform:
+                step_output_locator = output_locator
+            else:
+                step_output_locator = None
+            cur_value = transform(
+                cur_value,
+                workflow_builder=workflow_builder,
+                output_locator=step_output_locator,
+            )
+        return cur_value
+
+    def __attrs_post_init__(self) -> None:
+        if not self.transforms:
+            raise RuntimeError("Cannot compose zero transforms")
+
+
+def compose_key_value_store_transforms(
+    transforms: Sequence[KeyValueTransform]
+) -> KeyValueTransform:
+    return _ComposedKeyValueTransform(transforms)
 
 
 def split_key_value_store(
