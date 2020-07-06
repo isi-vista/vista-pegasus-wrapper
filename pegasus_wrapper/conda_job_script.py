@@ -89,6 +89,7 @@ class CondaJobScriptGenerator:
         *,
         working_directory: Path,
         ckpt_path: Optional[Path] = None,
+        override_conda_config: Optional[CondaConfiguration] = None,
     ) -> str:
         """
         Returns the content of a shell script to run the given Python entry point
@@ -99,8 +100,13 @@ class CondaJobScriptGenerator:
         for outputs which are time or resource intensive or can be shared across projects.
         Examples: Running BERT on all of Gigaword or Converting RDF triples to FlexNLP documents
         """
+        if override_conda_config:
+            conda_config = override_conda_config
+        else:
+            conda_config = self.conda_config
+
         return CONDA_SCRIPT.format(
-            conda_lines=self.conda_config.sbatch_lines() if self.conda_config else "",
+            conda_lines=conda_config.sbatch_lines() if conda_config else "",
             spack_lines=self.spack_config.sbatch_lines() if self.spack_config else "",
             working_directory=working_directory,
             entry_point=entry_point_name,
@@ -117,6 +123,7 @@ class CondaJobScriptGenerator:
         script_path: Path,
         params_path: Optional[Path],
         ckpt_path: Optional[Path] = None,
+        override_conda_config: Optional[CondaConfiguration] = None,
     ) -> None:
         if isinstance(parameters, Path):
             if params_path:
@@ -142,6 +149,7 @@ class CondaJobScriptGenerator:
                 param_file=params_path,
                 working_directory=working_directory,
                 ckpt_path=ckpt_path,
+                override_conda_config=override_conda_config,
             ),
             encoding="utf-8",
         )
