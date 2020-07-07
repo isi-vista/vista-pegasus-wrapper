@@ -27,7 +27,7 @@ def test_simple_dax(tmp_path):
             "partition": "scavenge",
         }
     )
-    workflow_builder = WorkflowBuilder.from_params(params)
+    workflow_builder = WorkflowBuilder.from_parameters(params)
     assert workflow_builder.name == "Test"
     assert workflow_builder.created_by == "Testing"
     assert (
@@ -82,7 +82,7 @@ def test_dax_with_job_on_saga(tmp_path):
     )
 
     resources = SlurmResourceRequest.from_parameters(slurm_params)
-    workflow_builder = WorkflowBuilder.from_params(workflow_params)
+    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
     multiply_artifact = ValueArtifact(

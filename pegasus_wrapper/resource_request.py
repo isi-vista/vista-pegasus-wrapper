@@ -80,8 +80,8 @@ class SlurmResourceRequest(ResourceRequest):
     num_gpus: Optional[int] = attrib(
         validator=optional(in_(Range.at_least(0))), default=None, kw_only=True
     )
-    job_time: Optional[str] = attrib(
-        validator=optional(instance_of(str)), default="1:00:00", kw_only=True
+    job_time_in_minutes: Optional[int] = attrib(
+        validator=optional(instance_of(int)), default=1440, kw_only=True
     )
 
     @staticmethod
@@ -93,7 +93,7 @@ class SlurmResourceRequest(ResourceRequest):
             memory=MemoryAmount.parse(params.string("memory"))
             if "memory" in params
             else None,
-            job_time=params.optional_string("job_time"),
+            job_time_in_minutes=params.optional_integer("job_time_in_minutes"),
         )
 
     def unify(self, other: ResourceRequest) -> ResourceRequest:
@@ -108,6 +108,10 @@ class SlurmResourceRequest(ResourceRequest):
             num_cpus=other.num_cpus if other.num_cpus else self.num_cpus,
             num_gpus=other.num_gpus if other.num_gpus is not None else self.num_gpus,
         )
+
+    def convert_time_to_slurm_format(self, job_time_in_minutes: int) -> str:
+        hours, mins = divmod(job_time_in_minutes, 60)
+        return f"{hours}:{mins}:00"
 
     def apply_to_job(self, job: Job, *, log_file: Path, job_name: str) -> None:
         if not self.partition:
@@ -128,9 +132,9 @@ class SlurmResourceRequest(ResourceRequest):
                 self.memory if self.memory else _SLURM_DEFAULT_MEMORY
             ),
             stdout_log_path=log_file,
-            time=self.job_time,
+            time=self.convert_time_to_slurm_format(self.job_time_in_minutes),
         )
-        logging.info(
+        logging.debug(
             "Slurm Resource Request for %s: %s", job_name, slurm_resource_content
         )
         job.addProfile(

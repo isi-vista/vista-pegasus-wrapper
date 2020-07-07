@@ -29,7 +29,7 @@ class DependencyNode:
     job: Optional[Job] = attrib(validator=optional(instance_of(Job)), kw_only=True)
     output_files: ImmutableSet[File] = attrib(
         validator=instance_of(ImmutableSet), kw_only=True
-    )
+    )  # checkpointed files for a job
 
     @staticmethod
     def from_job(job: Job, output_files: Optional[Iterable[File]]) -> "DependencyNode":

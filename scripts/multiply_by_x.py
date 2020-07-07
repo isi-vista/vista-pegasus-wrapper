@@ -12,12 +12,14 @@ def main(params: Parameters):
     x = params.integer("x")
     logging.info("Reading from input file: %s", str(input_file_path.absolute()))
     with input_file_path.open() as input_file:
-        with open(str(output_file_path.absolute()), "w") as output_file:
+        with output_file_path.absolute().open("w") as output_file:
             for num in input_file:
                 output_file.write(f"{int(num)*x}\n")
 
     logging.info("Writing to output file: %s", str(input_file_path.absolute()))
-    # time.sleep(60)
+
+    # Pause so that we can examine the job on the SAGA cluster
+    time.sleep(30)
 
 
 if __name__ == "__main__":
