@@ -13,7 +13,7 @@ from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.pegasus_utils import build_submit_script
 from pegasus_wrapper.resource_request import SlurmResourceRequest
-from scripts import multiply_by_x, sort_nums_in_file
+from pegasus_wrapper.scripts import multiply_by_x, sort_nums_in_file
 
 
 def example_workflow(params: Parameters):
@@ -39,13 +39,6 @@ def example_workflow(params: Parameters):
     workflow_params = workflow_params.unify(params)
 
 
-    # Basic slurm resource request params
-    #use partition and account for gaia instead
-    slurm_params = Parameters.from_mapping(
-        {"partition": "scavenge", "qos": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "1G"}
-    )
-
-
     # Our source input for the sample jobs
     multiply_input_file = tmp_path / "raw_nums.txt"
 
@@ -63,7 +56,6 @@ def example_workflow(params: Parameters):
     with multiply_input_file.open("w") as mult_file:
         mult_file.writelines(f"{num}\n" for num in nums)
 
-    resources = SlurmResourceRequest.from_parameters(slurm_params)
     initialize_vista_pegasus_wrapper(workflow_params)
 
     multiply_artifact = ValueArtifact(
@@ -86,7 +78,6 @@ def example_workflow(params: Parameters):
         sort_nums_in_file,
         {"input_file": multiply_output_file, "output_file": sorted_output_file},
         depends_on=[multiply_artifact],
-        resource_request=resources,
     )
 
     # Generate the Pegasus DAX file

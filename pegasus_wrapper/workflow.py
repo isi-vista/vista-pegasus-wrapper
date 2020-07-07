@@ -90,7 +90,7 @@ class WorkflowBuilder:
             default_site=params.string("site"),
             conda_script_generator=CondaJobScriptGenerator.from_parameters(params),
             namespace=params.string("namespace"),
-            default_resource_request=ResourceRequest.from_parameters(params),
+            default_resource_request=ResourceRequest.from_parameters(params.namespace("slurm")),
         )
 
     # def pegasus_executable_to_pegasus_job(
