@@ -73,11 +73,20 @@ def example_workflow(params: Parameters):
         locator=Locator("multiply"),
     )
 
+
+    slurm_params = Parameters.from_mapping({
+        "partition": "scanvenge",
+        "qos": "scavenge",
+        "memory": "2G",
+    })
+
     run_python_on_parameters(
         job_locator / "sort",
         sort_nums_in_file,
         {"input_file": multiply_output_file, "output_file": sorted_output_file},
         depends_on=[multiply_artifact],
+        #if you want to use a different resource for some task, you can do this way
+        resource_request=SlurmResourceRequest.from_parameters(slurm_params),
     )
 
     # Generate the Pegasus DAX file
