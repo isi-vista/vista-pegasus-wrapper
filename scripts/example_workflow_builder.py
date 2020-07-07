@@ -33,14 +33,18 @@ def example_workflow(params: Parameters):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
         }
     )
 
+    workflow_params = workflow_params.unify(params)
+
+
     # Basic slurm resource request params
+    #use partition and account for gaia instead
     slurm_params = Parameters.from_mapping(
-        {"partition": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "1G"}
+        {"partition": "scavenge", "qos": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "1G"}
     )
+
 
     # Our source input for the sample jobs
     multiply_input_file = tmp_path / "raw_nums.txt"
@@ -69,7 +73,7 @@ def example_workflow(params: Parameters):
             multiply_by_x,
             {
                 "input_file": multiply_input_file,
-                "ouput_file": multiply_output_file,
+                "output_file": multiply_output_file,
                 "x": 4,
             },
             depends_on=[],

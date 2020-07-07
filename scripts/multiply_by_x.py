@@ -8,7 +8,7 @@ def main(params: Parameters):
     output_file_path = params.creatable_file("output_file")
     x = params.integer("x")
     with input_file_path.open() as input_file:
-        with output_file_path.open() as output_file:
+        with output_file_path.open("w") as output_file:
             for num in input_file:
                 output_file.write(f"{num*x}\n")
 

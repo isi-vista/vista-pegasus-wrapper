@@ -17,7 +17,7 @@ setup(
     author_email="jalichtefeld@gmail.com,gabbard@isi.edu",
     description="A higher-level API for ISI Pegasus, adapted to the quirks of the ISI Vista group",
     url="https://github.com/isi-vista/vista-pegasus-wrapper",
-    packages=['pegasus_wrapper', 'pegasus_wrapper.resources'],
+    packages=find_packages(),
     package_data={'': ['sites.xml', 'pegasus.conf']},
     # 3.6 and up, but not Python 4
     python_requires="~=3.6",
@@ -25,7 +25,7 @@ setup(
         "importlib-resources==1.4.0",
 	"vistautils>=0.21.0"
     ],
-    scripts=['scripts/multiply_by_x.py', 'scripts/sort_nums_in_file.py', 'scripts/nuke_checkpoints'],
+    scripts=['scripts/multiply_by_x.py', 'scripts/sort_nums_in_file.py', 'scripts/nuke_checkpoints.py'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

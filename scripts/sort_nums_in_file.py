@@ -9,11 +9,11 @@ def main(params: Parameters):
     input_file_path = params.existing_file("input_file")
     output_file_path = params.creatable_file("output_file")
     with input_file_path.open() as input_file:
-        nums = [int(x) for x in input_file]
+        nums = [int(x.strip()) for x in input_file if x.strip() != ""]
 
     nums.sort()
 
-    output_file_path.write_text("\n".join(immutableset(nums)))
+    output_file_path.write_text("\n".join(immutableset([str(x) for x in nums])))
 
 
 if __name__ == "__main__":
