@@ -14,6 +14,13 @@ from Pegasus.DAX3 import Job, Namespace, Profile
 from saga_tools.slurm import to_slurm_memory_string
 from typing_extensions import Protocol
 
+SCAVENGE = "scavenge"
+EPHEMERAL = "ephemeral"
+
+SCAVENGE_MAX_WALLTIME = 120
+EPHEMERAL_MAX_WALLTIME = 720
+PROJECTS_MAX_WALLTIME = 1440
+
 
 class ResourceRequest(Protocol):
     """
@@ -111,15 +118,36 @@ class SlurmResourceRequest(ResourceRequest):
 
     def convert_time_to_slurm_format(self, job_time_in_minutes: int) -> str:
         hours, mins = divmod(job_time_in_minutes, 60)
-        return f"{hours}:{mins}:00"
+        return f"{hours}:{str(mins)+'0' if mins < 10 else mins}:00"
+
+    def check_time_limits(self) -> None:
+        if self.partition == SCAVENGE:
+            invalid_time = (
+                True if self.job_time_in_minutes > SCAVENGE_MAX_WALLTIME else False
+            )
+        if self.partition == EPHEMERAL:
+            invalid_time = (
+                True if self.job_time_in_minutes > EPHEMERAL_MAX_WALLTIME else False
+            )
+        else:
+            invalid_time = (
+                True if self.job_time_in_minutes > PROJECTS_MAX_WALLTIME else False
+            )
+
+        if invalid_time:
+            raise RuntimeError(
+                f"Time limit of {self.job_time_in_minutes} mins is too high for selected partition {self.partition}"
+            )
 
     def apply_to_job(self, job: Job, *, log_file: Path, job_name: str) -> None:
         if not self.partition:
             raise RuntimeError("A partition to run on must be specified.")
 
+        self.check_time_limits()
+
         qos_or_account = (
             f"qos {self.partition}"
-            if self.partition in ("scavenge", "ephemeral")
+            if self.partition in (SCAVENGE, EPHEMERAL)
             else f"account {self.partition}"
         )
         slurm_resource_content = SLURM_RESOURCE_STRING.format(
