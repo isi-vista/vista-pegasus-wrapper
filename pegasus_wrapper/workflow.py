@@ -189,6 +189,7 @@ class WorkflowBuilder:
             working_directory=job_dir,
             script_path=script_path,
             params_path=job_dir / "____params.params",
+            stdout_file=job_dir / "___stdout.log",
             ckpt_path=checkpoint_path,
             override_conda_config=override_conda_config,
         )
@@ -214,7 +215,7 @@ class WorkflowBuilder:
             resource_request = self.default_resource_request
 
         resource_request.apply_to_job(
-            job, job_name=self._job_name_for(job_name), log_file=job_dir / "___stdout.log"
+            job, job_name=self._job_name_for(job_name)
         )
 
         dependency_node = DependencyNode.from_job(job)
