@@ -1,3 +1,4 @@
+import logging
 from abc import abstractmethod
 from typing import Optional
 
@@ -11,6 +12,9 @@ from vistautils.range import Range
 from Pegasus.DAX3 import Job, Namespace, Profile
 from saga_tools.slurm import to_slurm_memory_string
 from typing_extensions import Protocol
+
+SCAVENGE = "scavenge"
+EPHEMERAL = "ephemeral"
 
 
 class ResourceRequest(Protocol):
@@ -58,6 +62,7 @@ class ResourceRequest(Protocol):
 
 
 _SLURM_DEFAULT_MEMORY = MemoryAmount.parse("2G")
+_DEFAULT_JOB_TIME_IN_MINUTES = 14400
 
 
 @attrs(frozen=True, slots=True)
@@ -78,6 +83,11 @@ class SlurmResourceRequest(ResourceRequest):
     num_gpus: Optional[int] = attrib(
         validator=optional(in_(Range.at_least(0))), default=None, kw_only=True
     )
+    job_time_in_minutes: Optional[int] = attrib(
+        validator=optional(instance_of(int)),
+        default=_DEFAULT_JOB_TIME_IN_MINUTES,
+        kw_only=True,
+    )
 
     @staticmethod
     def from_parameters(params: Parameters) -> ResourceRequest:
@@ -88,6 +98,7 @@ class SlurmResourceRequest(ResourceRequest):
             memory=MemoryAmount.parse(params.string("memory"))
             if "memory" in params
             else None,
+            job_time_in_minutes=params.optional_integer("job_time_in_minutes"),
         )
 
     def unify(self, other: ResourceRequest) -> ResourceRequest:
@@ -103,13 +114,17 @@ class SlurmResourceRequest(ResourceRequest):
             num_gpus=other.num_gpus if other.num_gpus is not None else self.num_gpus,
         )
 
+    def convert_time_to_slurm_format(self, job_time_in_minutes: int) -> str:
+        hours, mins = divmod(job_time_in_minutes, 60)
+        return f"{hours}:{str(mins)+'0' if mins < 10 else mins}:00"
+
     def apply_to_job(self, job: Job, *, job_name: str) -> None:
         if not self.partition:
             raise RuntimeError("A partition to run on must be specified.")
 
         qos_or_account = (
             f"qos {self.partition}"
-            if self.partition in ("scavenge", "ephemeral")
+            if self.partition in (SCAVENGE, EPHEMERAL)
             else f"account {self.partition}"
         )
         slurm_resource_content = SLURM_RESOURCE_STRING.format(
@@ -121,6 +136,14 @@ class SlurmResourceRequest(ResourceRequest):
             mem_str=to_slurm_memory_string(
                 self.memory if self.memory else _SLURM_DEFAULT_MEMORY
             ),
+            time=self.convert_time_to_slurm_format(
+                self.job_time_in_minutes
+                if self.job_time_in_minutes
+                else _DEFAULT_JOB_TIME_IN_MINUTES
+            ),
+        )
+        logging.debug(
+            "Slurm Resource Request for %s: %s", job_name, slurm_resource_content
         )
         job.addProfile(
             Profile(Namespace.PEGASUS, "glite.arguments", slurm_resource_content)
@@ -129,6 +152,5 @@ class SlurmResourceRequest(ResourceRequest):
 
 SLURM_RESOURCE_STRING = """--{qos_or_account} --partition {partition} --ntasks 1
  --cpus-per-task {num_cpus} --gpus-per-task {num_gpus} --job-name {job_name} --mem {mem_str}
- """
-
+ --time {time}"""
 _BACKEND_PARAM = "backend"

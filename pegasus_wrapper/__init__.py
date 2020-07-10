@@ -32,7 +32,7 @@ _SINGLETON_WORKFLOW_BUILDER: WorkflowBuilder = None  # type: ignore
 
 def initialize_vista_pegasus_wrapper(parameters: Parameters) -> None:
     global _SINGLETON_WORKFLOW_BUILDER  # pylint:disable=global-statement
-    _SINGLETON_WORKFLOW_BUILDER = WorkflowBuilder.from_params(parameters)
+    _SINGLETON_WORKFLOW_BUILDER = WorkflowBuilder.from_parameters(parameters)
 
 
 def _assert_singleton_workflow_builder() -> None:

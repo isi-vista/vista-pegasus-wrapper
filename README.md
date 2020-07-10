@@ -38,7 +38,7 @@ The log output will provide you the output location of the `Text.dax` Assuming y
 
 ```
 cd "path/to/output/dir"
-pegasus-plan --conf pegasus.conf --dax Test.dax --dir "path/to/output/dir" --relative-dir exampleRun-001 --cleanup leaf --force --sites saga --output-site local
+pegasus-plan --conf pegasus.conf --dax Test.dax --dir "path/to/output/dir" --relative-dir exampleRun-001
 pegasus-run "path/to/output/dir/"exampleRun-001
 ```
 The example workflow submits **ONLY** to `scavenge`. In an actual workflow we would recommend parameterizing it.
@@ -53,6 +53,12 @@ A [Nuke Checkpoints](scripts/nuke_checkpoints.py) script is provided for ease of
 
 Currently the root directory should be be in your home directory and not on an NAS like `/nas/gaia/` as the submission will fail for an NFS reason.
 The experiment directory can be (and ought to be) on such a drive, though.
+
+# Common Errors
+
+## Mismatching partition selection and max walltime
+
+Partitions each have a max walltime associated with them. See the saga cluster wiki [here]("https://github.com/isi-vista/saga-cluster/wiki/How-to-use-the-SAGA-queue#partitions"). If you specify a partition with a `job_time_in_minutes` greater than that partition's max walltime, you will see an error. 
 
 # Contributing
 

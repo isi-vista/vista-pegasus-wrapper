@@ -21,17 +21,31 @@ pegasus-plan \\
 
 
 def path_to_pegasus_file(
-    path: Path, *, site: str = "local", name: Optional[str] = None
+    path: Path,
+    *,
+    site: str = "local",
+    name: Optional[str] = None,
+    is_raw_input: bool = False
 ) -> File:
     """
     Given a *path* object return a pegasus `File` for usage in a workflow
-
     If the resource is not on a local machine provide the *site* string.
-
     Files can be used for either an input or output of a Job.
+
+    Args:
+        path: path to the file
+        site: site to be used, default is local. Should be set to saga if running
+        on cluster.
+        name: name given to the file
+        is_raw_input: indicates that the file doesn't come from the output of another
+        job in the workflow, so can be safely added to the Pegasus DAX
+    Returns:
+        Pegasus File at the given path
+
     """
-    rtnr = File(path.stem + path.suffix if name is None else name)
-    rtnr.addPFN(path_to_pfn(path, site=site))
+    rtnr = File(name if name else str(path.absolute()).replace("/", "-"))
+    if is_raw_input:
+        rtnr.addPFN(path_to_pfn(path, site=site))
     return rtnr
 
 

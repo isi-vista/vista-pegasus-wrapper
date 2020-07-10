@@ -19,7 +19,7 @@ def example_workflow(params: Parameters):
     """
     An example script to generate a workflow for submission to Pegasus.
     """
-    tmp_path = params.creatable_directory("dir")
+    tmp_path = params.creatable_directory("example_root_dir")
 
     # Generating parameters for initializing a workflow
     # We recommend making workflow directory, site, and partition parameters

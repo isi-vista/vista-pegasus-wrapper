@@ -6,7 +6,7 @@ and should instead use the methods in the root of the package.
 """
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Set, Union
 
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
@@ -19,10 +19,14 @@ from pegasus_wrapper import resources
 from pegasus_wrapper.artifact import DependencyNode, _canonicalize_depends_on
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
 from pegasus_wrapper.locator import Locator
-from pegasus_wrapper.pegasus_utils import build_submit_script, path_to_pfn
+from pegasus_wrapper.pegasus_utils import (
+    build_submit_script,
+    path_to_pegasus_file,
+    path_to_pfn,
+)
 from pegasus_wrapper.resource_request import ResourceRequest
 
-from Pegasus.DAX3 import ADAG, Executable, Job
+from Pegasus.DAX3 import ADAG, Executable, File, Job, Link
 from saga_tools.conda import CondaConfiguration
 
 try:
@@ -48,81 +52,45 @@ class WorkflowBuilder:
     created_by: str = attrib(validator=instance_of(str), kw_only=True)
     _workflow_directory: Path = attrib(validator=instance_of(Path), kw_only=True)
     _namespace: str = attrib(validator=instance_of(str), kw_only=True)
+    _default_site: str = attrib(validator=instance_of(str), kw_only=True)
+    default_resource_request: ResourceRequest = attrib(
+        validator=instance_of(ResourceRequest), kw_only=True
+    )
     _conda_script_generator: Optional[CondaJobScriptGenerator] = attrib(
         validator=optional(instance_of(CondaJobScriptGenerator)),
         default=None,
         kw_only=True,
     )
-    _default_site: str = attrib(validator=instance_of(str), kw_only=True)
-    default_resource_request: ResourceRequest = attrib(
-        validator=instance_of(ResourceRequest), kw_only=True
-    )
-
+    # Pegasus' internal structure of the job requirements
     _job_graph: ADAG = attrib(init=False)
-    """
-    Pegasus' internal structure of the job requirements
-    """
+    # Occassionally an identical job may be scheduled multiple times
+    # in the workflow graph. We compute this based on a job signature
+    # and only actually schedule the job once.
     _signature_to_job: Dict[Any, DependencyNode] = attrib(init=False, factory=dict)
-    """
-    Occassionally an identical job may be scheduled multiple times
-    in the workflow graph. We compute this based on a job signature
-    and only actually schedule the job once.
-    """
-
-    # _graph: DiGraph = attrib(
-    #     validator=instance_of(DiGraph), kw_only=True, default=DiGraph()
-    # )
-    # _job_to_executable: Dict[Job, Executable] = attrib(
-    #     validator=instance_of(Dict), kw_only=True, default=Factory(dict), init=False
-    # )
-    # _jobs_in_graph: List[Job] = attrib(
-    #     validator=instance_of(List), kw_only=True, default=Factory(list), init=False
-    # )
-    # _files_in_graph: List[File] = attrib(
-    #     validator=instance_of(List), kw_only=True, default=Factory(list), init=False
-    # )
+    # Files already added to the job graph
+    _added_files: Set[File] = attrib(init=False, factory=set)
+    # Path to the replica catalog to store checkpointed files
+    _replica_catalog: Path = attrib(validator=instance_of(Path))
 
     @staticmethod
-    def from_params(params: Parameters) -> "WorkflowBuilder":
+    def from_parameters(params: Parameters) -> "WorkflowBuilder":
+        workflow_directory = params.creatable_directory("workflow_directory")
+
+        replica_catalog = workflow_directory / "rc.dat"
+        if replica_catalog.exists():
+            replica_catalog.unlink()
+        replica_catalog.touch(mode=0o744)
+
         return WorkflowBuilder(
             name=params.string("workflow_name", default="Workflow"),
             created_by=params.string("workflow_created", default="Default Constructor"),
-            workflow_directory=params.creatable_directory("workflow_directory"),
+            workflow_directory=workflow_directory,
             default_site=params.string("site"),
             conda_script_generator=CondaJobScriptGenerator.from_parameters(params),
             namespace=params.string("namespace"),
             default_resource_request=ResourceRequest.from_parameters(params),
+            replica_catalog=replica_catalog,
         )
-
-    # def pegasus_executable_to_pegasus_job(
-    #     self,
-    #     executable: Executable,
-    #     inputs: Iterable[File] = immutableset(),
-    #     outputs: Iterable[File] = immutableset(),
-    # ) -> Job:
-    #     rtrnr = Job(executable)
-    #     self._job_to_executable[rtrnr] = executable
-    #
-    #     for file in inputs:
-    #         rtrnr.uses(file, link=Link.INPUT)
-    #
-    #     for file in outputs:
-    #         rtrnr.uses(file, link=Link.OUTPUT, transfer=True)
-    #
-    #     return rtrnr
-
-    # def schedule_job(self, job: Job, resource_request: ResourceRequest) -> DependencyNode:
-    #     """
-    #     Schedule a `Job` for computation during the workflow
-    #     """
-    #
-    #     resource_request.apply_to_job(job, log_base_directory=self.log_base_directory)
-    #
-    #     self._job_graph.addJob(job)
-    #     self._add_files_to_graph(job, immutableset(job.get_inputs()), is_input=True)
-    #     self._add_files_to_graph(job, immutableset(job.get_outputs()), is_input=False)
-    #
-    #     return DependencyNode(job=job)
 
     def directory_for(self, locator: Locator) -> Path:
         """
@@ -156,13 +124,8 @@ class WorkflowBuilder:
         for future jobs.
         """
         job_dir = self.directory_for(job_name)
+        ckpt_name = job_name / "___ckpt"
         checkpoint_path = job_dir / "___ckpt"
-
-        if checkpoint_path.exists():
-            logging.info(
-                "Skipping %s because checkpoint indicates it is complete", job_name
-            )
-            return DependencyNode.already_done()
 
         depends_on = _canonicalize_depends_on(depends_on)
         if isinstance(python_module, str):
@@ -212,6 +175,8 @@ class WorkflowBuilder:
         for parent_dependency in depends_on:
             if parent_dependency.job:
                 self._job_graph.depends(job, parent_dependency.job)
+            for out_file in parent_dependency.output_files:
+                job.uses(out_file, link=Link.INPUT)
 
         if resource_request is not None:
             resource_request = self.default_resource_request.unify(resource_request)
@@ -220,64 +185,34 @@ class WorkflowBuilder:
 
         resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
 
-        dependency_node = DependencyNode.from_job(job)
+        # Handle Output Files
+        # This is currently only handled as the checkpoint file
+        # See: https://github.com/isi-vista/vista-pegasus-wrapper/issues/25
+        checkpoint_pegasus_file = path_to_pegasus_file(
+            checkpoint_path, site=self._default_site, name=f"{ckpt_name}"
+        )
+
+        if checkpoint_pegasus_file not in self._added_files:
+            self._job_graph.addFile(checkpoint_pegasus_file)
+            self._added_files.add(checkpoint_pegasus_file)
+
+        # If the checkpoint file already exists, we want to add it to the replica catalog
+        # so that we don't run the job corresponding to the checkpoint file again
+        if checkpoint_path.exists():
+            with self._replica_catalog.open("a+") as handle:
+                handle.write(
+                    f"{ckpt_name} file://{checkpoint_path} site={self._default_site}\n"
+                )
+
+        job.uses(checkpoint_pegasus_file, link=Link.OUTPUT, transfer=True)
+
+        dependency_node = DependencyNode.from_job(
+            job, output_files=[checkpoint_pegasus_file]
+        )
         self._signature_to_job[signature] = dependency_node
 
         logging.info("Scheduled Python job %s", job_name)
         return dependency_node
-
-    # def _add_files_to_graph(
-    #     self, job: Job, files: Iterable[File], *, is_input: bool
-    # ) -> None:
-    #     for file in files:
-    #         if file not in self._graph:
-    #             self._graph.add_node(file)
-    #             self._files_in_graph.append(file)
-    #
-    #         if is_input:
-    #             self._graph.add_edge(file, job, label=INPUT_FILE_LABEL)
-    #             for pred in self._graph.predecessors(file):
-    #                 if (
-    #                     self._graph.get_edge_data(pred, file)["label"]
-    #                     == OUTPUT_FILE_LABEL
-    #                 ):
-    #                     self._graph.add_edge(job, pred, label=DEPENDENT_JOB_LABEL)
-    #         else:
-    #             self._graph.add_edge(job, file, label=OUTPUT_FILE_LABEL)
-    #             for suc in self._graph.successors(file):
-    #                 if self._graph.get_edge_data(file, suc)["label"] == INPUT_FILE_LABEL:
-    #                     self._graph.add_edge(suc, job, label=DEPENDENT_JOB_LABEL)
-
-    # def build(self, output_xml_dir: Path) -> None:
-    #     """
-    #     build DAG, call writeXml
-    #     We will let the user submit themselves,
-    #     however we could provide them the submit command if known
-    #     """
-    #     diamond = ADAG(self.name)
-    #     diamond.metadata("name", self.name)
-    #     diamond.metadata("createdby", self.created_by)
-    #
-    #     for file in self._files_in_graph:
-    #         diamond.addFile(file)
-    #
-    #     for job in self._jobs_in_graph:
-    #         diamond.addExecutable(self._job_to_executable[job])
-    #         diamond.addJob(job)
-    #         for successor in self._graph.successors(job):
-    #             if (
-    #                 self._graph.get_edge_data(job, successor)["label"]
-    #                 == DEPENDENT_JOB_LABEL
-    #             ):
-    #                 diamond.depends(successor, job)
-    #
-    #     dax_file_name = f"{self.name}.dax"
-    #     dax_file = output_xml_dir / dax_file_name
-    #     with dax_file.open("w") as dax:
-    #         diamond.writeXML(dax)
-    #     build_submit_script(
-    #         output_xml_dir / "submit.sh", dax_file_name, self._workflow_directory
-    #     )
 
     def write_dax_to_dir(self, output_xml_dir: Optional[Path] = None) -> Path:
         if not output_xml_dir:
@@ -300,39 +235,16 @@ class WorkflowBuilder:
 
         pegasus_conf_path = output_xml_dir / "pegasus.conf"
         pegasus_conf_path.write_text(
-            pkg_resources.read_text(resources, "pegasus.conf"), encoding="utf-8"
+            data=pkg_resources.read_text(resources, "pegasus.conf")
+            + "pegasus.catalog.replica=File\n"
+            + f"pegasus.catalog.replica.file={self._replica_catalog}\n",
+            encoding="utf-8",
         )
 
         return dax_file
 
     def default_conda_configuration(self) -> CondaConfiguration:
         return self._conda_script_generator.conda_config
-
-    # def get_job_inputs(self, job: Job) -> ImmutableSet[File]:
-    #     return immutableset(
-    #         adj_node
-    #         for adj_node in self._graph.predecessors(job)
-    #         if self._graph.get_edge_data(adj_node, job) == INPUT_FILE_LABEL
-    #     )
-    #
-    # def get_job_outputs(self, job: Job) -> ImmutableSet[File]:
-    #     return immutableset(
-    #         adj_node
-    #         for adj_node in self._graph.successors(job)
-    #         if self._graph.get_edge_data(adj_node, job) == OUTPUT_FILE_LABEL
-    #     )
-    #
-    # def get_job_executable(self, job: Job) -> Executable:
-    #     return self._job_to_executable[job]
-    #
-    # def get_jobs(self) -> ImmutableSet[Job]:
-    #     return immutableset(self._jobs_in_graph)
-    #
-    # def get_files(self) -> ImmutableSet[File]:
-    #     return immutableset(self._files_in_graph)
-    #
-    # def get_executables(self) -> ImmutableSet[Executable]:
-    #     return immutableset(self._job_to_executable.values())
 
     @_job_graph.default
     def _init_job_graph(self) -> ADAG:
