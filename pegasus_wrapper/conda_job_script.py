@@ -123,7 +123,7 @@ class CondaJobScriptGenerator:
         *,
         working_directory: Path,
         script_path: Path,
-        stdout_file: Path,
+        stdout_file: Optional[Path],
         params_path: Optional[Path],
         ckpt_path: Optional[Path] = None,
         override_conda_config: Optional[CondaConfiguration] = None,
@@ -145,6 +145,9 @@ class CondaJobScriptGenerator:
                 f"Parameters must be either Parameters or path to a param file, "
                 f"but got {parameters}"
             )
+
+        if not stdout_file:
+            stdout_file = working_directory / "___stdout.log"
 
         script_path.write_text(
             self.generate_shell_script(
