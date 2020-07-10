@@ -9,8 +9,8 @@ from pegasus_wrapper.locator import Locator, _parse_parts
 from pegasus_wrapper.pegasus_utils import build_submit_script
 from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.workflow import WorkflowBuilder
-from scripts.multiply_by_x import main as multiply_by_x_main
-from scripts.sort_nums_in_file import main as sort_nums_main
+from pegasus_wrapper.scripts.multiply_by_x import main as multiply_by_x_main
+from pegasus_wrapper.scripts.sort_nums_in_file import main as sort_nums_main
 
 import pytest
 
