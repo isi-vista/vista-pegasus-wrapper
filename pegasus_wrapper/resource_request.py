@@ -1,6 +1,5 @@
 import logging
 from abc import abstractmethod
-from pathlib import Path
 from typing import Optional
 
 from attr import attrib, attrs
@@ -36,7 +35,7 @@ class ResourceRequest(Protocol):
     partition: str
 
     @abstractmethod
-    def apply_to_job(self, job: Job, *, log_file: Path, job_name: str) -> None:
+    def apply_to_job(self, job: Job, *, job_name: str) -> None:
         """
         Applies the appropriate settings to *job*
         to account for the requested resources.
@@ -119,7 +118,7 @@ class SlurmResourceRequest(ResourceRequest):
         hours, mins = divmod(job_time_in_minutes, 60)
         return f"{hours}:{str(mins)+'0' if mins < 10 else mins}:00"
 
-    def apply_to_job(self, job: Job, *, log_file: Path, job_name: str) -> None:
+    def apply_to_job(self, job: Job, *, job_name: str) -> None:
         if not self.partition:
             raise RuntimeError("A partition to run on must be specified.")
 
@@ -137,7 +136,6 @@ class SlurmResourceRequest(ResourceRequest):
             mem_str=to_slurm_memory_string(
                 self.memory if self.memory else _SLURM_DEFAULT_MEMORY
             ),
-            stdout_log_path=log_file,
             time=self.convert_time_to_slurm_format(
                 self.job_time_in_minutes
                 if self.job_time_in_minutes

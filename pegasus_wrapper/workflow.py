@@ -26,7 +26,11 @@ from pegasus_wrapper.pegasus_utils import (
 )
 from pegasus_wrapper.resource_request import ResourceRequest
 
+<<<<<<< HEAD
 from Pegasus.DAX3 import ADAG, Executable, File, Job, Link
+=======
+from Pegasus.DAX3 import ADAG, Executable, Job
+>>>>>>> adce5f5f63222ee028f7e15578a8b0e577e82319
 from saga_tools.conda import CondaConfiguration
 
 try:
@@ -147,12 +151,16 @@ class WorkflowBuilder:
             return self._signature_to_job[signature]
 
         script_path = job_dir / "___run.sh"
+        stdout_path = parameters.string(
+            "logfile", default=str((job_dir / "___stdout.log").absolute())
+        )
         self._conda_script_generator.write_shell_script_to(
             entry_point_name=fully_qualified_module_name,
             parameters=parameters,
             working_directory=job_dir,
             script_path=script_path,
             params_path=job_dir / "____params.params",
+            stdout_file=stdout_path,
             ckpt_path=checkpoint_path,
             override_conda_config=override_conda_config,
         )
@@ -179,9 +187,7 @@ class WorkflowBuilder:
         else:
             resource_request = self.default_resource_request
 
-        resource_request.apply_to_job(
-            job, job_name=self._job_name_for(job_name), log_file=job_dir / "___stdout.log"
-        )
+        resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
 
         # Handle Output Files
         # This is currently only handled as the checkpoint file

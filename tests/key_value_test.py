@@ -1,3 +1,6 @@
+from vistautils.parameters import Parameters
+
+from pegasus_wrapper import initialize_vista_pegasus_wrapper
 from pegasus_wrapper.key_value import (
     compose_key_value_store_transforms,
     transform_key_value_store,
@@ -5,7 +8,7 @@ from pegasus_wrapper.key_value import (
 from pegasus_wrapper.locator import Locator
 
 
-def test_composed_key_value_transform():
+def test_composed_key_value_transform(tmp_path):
     kvs = {"doc1": 5, "doc2": 10}
 
     def add1(values, **kwargs):  # pylint:disable=unused-argument
@@ -15,6 +18,20 @@ def test_composed_key_value_transform():
         return {key: val - 2 for key, val in values.items()}
 
     composed_transforms = compose_key_value_store_transforms(transforms=[add1, subtract2])
+
+    params = Parameters.from_mapping(
+        {
+            "workflow_name": "Test",
+            "workflow_created": "Testing",
+            "workflow_log_dir": str(tmp_path / "log"),
+            "workflow_directory": str(tmp_path / "working"),
+            "site": "saga",
+            "namespace": "test",
+            "partition": "scavenge",
+        }
+    )
+
+    initialize_vista_pegasus_wrapper(params)
 
     transformed_kvs = transform_key_value_store(
         kvs, composed_transforms, output_locator=Locator([]), parallelism=1

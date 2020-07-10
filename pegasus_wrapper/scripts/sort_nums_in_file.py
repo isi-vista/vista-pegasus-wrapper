@@ -12,15 +12,11 @@ def main(params: Parameters):
     output_file_path = params.creatable_file("output_file")
     logging.info("Reading from input file: %s", str(input_file_path.absolute()))
     with input_file_path.open() as input_file:
-        nums = [int(x) for x in input_file]
+        nums = [int(x.strip()) for x in input_file if x.strip() != ""]
 
     nums.sort()
 
-    # Pause so that we can examine the job on the SAGA cluster
-    time.sleep(30)
-
-    logging.info("Writing to output file: %s", str(input_file_path.absolute()))
-    output_file_path.write_text("\n".join(f"{n}" for n in immutableset(nums)))
+    output_file_path.write_text("\n".join(immutableset([str(x) for x in nums])))
 
 
 if __name__ == "__main__":

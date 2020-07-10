@@ -12,7 +12,7 @@ def main(params: Parameters):
     x = params.integer("x")
     logging.info("Reading from input file: %s", str(input_file_path.absolute()))
     with input_file_path.open() as input_file:
-        with output_file_path.absolute().open("w") as output_file:
+        with output_file_path.open("w") as output_file:
             for num in input_file:
                 output_file.write(f"{int(num)*x}\n")
 
