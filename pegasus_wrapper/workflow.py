@@ -15,13 +15,14 @@ from vistautils.class_utils import fully_qualified_name
 from vistautils.io_utils import CharSink
 from vistautils.parameters import Parameters, YAMLParametersWriter
 
-from Pegasus.DAX3 import ADAG, Executable, Job
 from pegasus_wrapper import resources
 from pegasus_wrapper.artifact import DependencyNode, _canonicalize_depends_on
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
 from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.pegasus_utils import build_submit_script, path_to_pfn
 from pegasus_wrapper.resource_request import ResourceRequest
+
+from Pegasus.DAX3 import ADAG, Executable, Job
 from saga_tools.conda import CondaConfiguration
 
 try:
@@ -183,7 +184,9 @@ class WorkflowBuilder:
             return self._signature_to_job[signature]
 
         script_path = job_dir / "___run.sh"
-        stdout_path = parameters.string('logfile', default=str((job_dir / "___stdout.log").absolute()))
+        stdout_path = parameters.string(
+            "logfile", default=str((job_dir / "___stdout.log").absolute())
+        )
         self._conda_script_generator.write_shell_script_to(
             entry_point_name=fully_qualified_module_name,
             parameters=parameters,
@@ -215,9 +218,7 @@ class WorkflowBuilder:
         else:
             resource_request = self.default_resource_request
 
-        resource_request.apply_to_job(
-            job, job_name=self._job_name_for(job_name)
-        )
+        resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
 
         dependency_node = DependencyNode.from_job(job)
         self._signature_to_job[signature] = dependency_node

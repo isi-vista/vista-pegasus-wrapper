@@ -12,7 +12,6 @@ from pegasus_wrapper import (
 from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.pegasus_utils import build_submit_script
-from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.scripts import multiply_by_x, sort_nums_in_file
 
 
@@ -37,7 +36,6 @@ def example_workflow(params: Parameters):
     )
 
     workflow_params = workflow_params.unify(params)
-
 
     # Our source input for the sample jobs
     multiply_input_file = tmp_path / "raw_nums.txt"
@@ -67,7 +65,7 @@ def example_workflow(params: Parameters):
                 "input_file": multiply_input_file,
                 "output_file": multiply_output_file,
                 "x": 4,
-                "logfile": str(tmp_path / "multiply_log.txt")
+                "logfile": str(tmp_path / "multiply_log.txt"),
             },
             depends_on=[],
         ),
@@ -79,8 +77,8 @@ def example_workflow(params: Parameters):
         sort_nums_in_file,
         {"input_file": multiply_output_file, "output_file": sorted_output_file},
         depends_on=[multiply_artifact],
-        #if you want to use a different resource for some task, you can do this way
-        #resource_request=SlurmResourceRequest.from_parameters(slurm_params),
+        # if you want to use a different resource for some task, you can do this way
+        # resource_request=SlurmResourceRequest.from_parameters(slurm_params),
     )
 
     # Generate the Pegasus DAX file
@@ -88,7 +86,8 @@ def example_workflow(params: Parameters):
 
     submit_script = tmp_path / "submit_script.sh"
 
-    # Our attempt at an easy submit file, it MAY NOT be accurate for more complicated workflows but it
+    # Our attempt at an easy submit file, it MAY NOT be accurate for more complicated
+    # workflows but it
     # does work for this simple example.
     # See https://github.com/isi-vista/vista-pegasus-wrapper/issues/27
     build_submit_script(

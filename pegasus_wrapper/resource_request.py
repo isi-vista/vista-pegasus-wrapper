@@ -1,5 +1,4 @@
 from abc import abstractmethod
-from pathlib import Path
 from typing import Optional
 
 from attr import attrib, attrs
@@ -11,7 +10,6 @@ from vistautils.range import Range
 
 from Pegasus.DAX3 import Job, Namespace, Profile
 from saga_tools.slurm import to_slurm_memory_string
-
 from typing_extensions import Protocol
 
 
@@ -33,7 +31,7 @@ class ResourceRequest(Protocol):
     partition: str
 
     @abstractmethod
-    def apply_to_job(self, job: Job, job_name: str) -> None:
+    def apply_to_job(self, job: Job, *, job_name: str) -> None:
         """
         Applies the appropriate settings to *job*
         to account for the requested resources.
