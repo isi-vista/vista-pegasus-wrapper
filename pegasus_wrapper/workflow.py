@@ -26,12 +26,9 @@ from pegasus_wrapper.pegasus_utils import (
 )
 from pegasus_wrapper.resource_request import ResourceRequest
 
-<<<<<<< HEAD
 from Pegasus.DAX3 import ADAG, Executable, File, Job, Link
-=======
-from Pegasus.DAX3 import ADAG, Executable, Job
->>>>>>> adce5f5f63222ee028f7e15578a8b0e577e82319
 from saga_tools.conda import CondaConfiguration
+
 
 try:
     import importlib.resources as pkg_resources
