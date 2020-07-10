@@ -67,16 +67,16 @@ def example_workflow(params: Parameters):
                 "input_file": multiply_input_file,
                 "output_file": multiply_output_file,
                 "x": 4,
+                "logfile": str(tmp_path / "multiply_log.txt")
             },
             depends_on=[],
         ),
         locator=Locator("multiply"),
     )
 
-
     slurm_params = Parameters.from_mapping({
-        "partition": "scanvenge",
-        "qos": "scavenge",
+        "partition": "gaia",
+        "account": "gaia",
         "memory": "2G",
     })
 

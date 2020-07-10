@@ -21,8 +21,7 @@ The docs will be under `docs/_build/html`
 
 # Usage
 A workflow is an organized logical path taking input data and running predefined processes over the data to produce a structured output.
-For our case the workflows combine multiple steps of our processing together to allow for easily repeatable experimentation. 
-[Pegasus](https://pegasus.isi.edu/) is an ISI developed workflow management system which is used to manage the submission and execution of these workflows. Each workflow runs on a set of default slurm parameters that is loaded from the parameter file. The slurm resources should be put under the "slurm" namespace. You can explicitly specify the resource type for any step of the pipeline using the resource_request argument (see the example provided).
+[Pegasus](https://pegasus.isi.edu/) is an ISI developed workflow management system which is used to manage the submission and execution of these workflows. 
 Pegasus functions on a directed graph structure (a *DAX*) to manage the job dependency, file transfer between computational resources, and execution environments.
 This library simplifies the process of writing a profile which can be converted into a DAX for submission to the Pegasus controller.
 

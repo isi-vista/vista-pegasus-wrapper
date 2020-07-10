@@ -90,7 +90,7 @@ class WorkflowBuilder:
             default_site=params.string("site"),
             conda_script_generator=CondaJobScriptGenerator.from_parameters(params),
             namespace=params.string("namespace"),
-            default_resource_request=ResourceRequest.from_parameters(params.namespace("slurm")),
+            default_resource_request=ResourceRequest.from_parameters(params),
         )
 
     # def pegasus_executable_to_pegasus_job(
@@ -183,13 +183,14 @@ class WorkflowBuilder:
             return self._signature_to_job[signature]
 
         script_path = job_dir / "___run.sh"
+        stdout_path = parameters.string('logfile', default=str((job_dir / "___stdout.log").absolute()))
         self._conda_script_generator.write_shell_script_to(
             entry_point_name=fully_qualified_module_name,
             parameters=parameters,
             working_directory=job_dir,
             script_path=script_path,
             params_path=job_dir / "____params.params",
-            stdout_file=job_dir / "___stdout.log",
+            stdout_file=stdout_path,
             ckpt_path=checkpoint_path,
             override_conda_config=override_conda_config,
         )

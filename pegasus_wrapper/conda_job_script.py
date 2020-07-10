@@ -86,9 +86,9 @@ class CondaJobScriptGenerator:
         self,
         entry_point_name: str,
         param_file: Path,
-        stdout_file: Path,
         *,
         working_directory: Path,
+        stdout_file: Path,
         ckpt_path: Optional[Path] = None,
         override_conda_config: Optional[CondaConfiguration] = None,
     ) -> str:
@@ -113,18 +113,17 @@ class CondaJobScriptGenerator:
             entry_point=entry_point_name,
             param_file=param_file,
             ckpt_line=f"touch {ckpt_path.absolute()}" if ckpt_path else "",
-            stdout_file=stdout_file,
+            stdout_file=stdout_file
         )
-
 
     def write_shell_script_to(
         self,
         entry_point_name: str,
         parameters: Union[Path, Parameters],
-        stdout_file: Path,
         *,
         working_directory: Path,
         script_path: Path,
+        stdout_file: Path,
         params_path: Optional[Path],
         ckpt_path: Optional[Path] = None,
         override_conda_config: Optional[CondaConfiguration] = None,

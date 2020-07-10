@@ -38,10 +38,10 @@ flake8:
 
 black-fix:
 	isort -rc .
-	black $(SOURCE_DIR_NAME) tests benchmarks scripts
+	black $(SOURCE_DIR_NAME) tests benchmarks 
 
 black-check:
-	black --check $(SOURCE_DIR_NAME) tests benchmarks scripts
+	black --check $(SOURCE_DIR_NAME) tests benchmarks 
 
 doc-lint:
 	sphinx-build -nWT -b dummy docs docs/_build/html

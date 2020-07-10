@@ -123,8 +123,6 @@ class SlurmResourceRequest(ResourceRequest):
             mem_str=to_slurm_memory_string(
                 self.memory if self.memory else _SLURM_DEFAULT_MEMORY
             ),
-            # stdout_log_path=log_file, This will be taken care of with kickstart due to issue discussed here:
-            #https://github.com/isi-vista/vista-pegasus-wrapper/issues/26
         )
         job.addProfile(
             Profile(Namespace.PEGASUS, "glite.arguments", slurm_resource_content)
@@ -133,6 +131,6 @@ class SlurmResourceRequest(ResourceRequest):
 
 SLURM_RESOURCE_STRING = """--{qos_or_account} --partition {partition} --ntasks 1
  --cpus-per-task {num_cpus} --gpus-per-task {num_gpus} --job-name {job_name} --mem {mem_str}
-""" #--output={stdout_log_path} removed due to due https://github.com/isi-vista/vista-pegasus-wrapper/issues/26
+ """
 
 _BACKEND_PARAM = "backend"
