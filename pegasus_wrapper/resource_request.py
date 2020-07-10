@@ -1,5 +1,4 @@
 from abc import abstractmethod
-from pathlib import Path
 from typing import Optional
 
 from attr import attrib, attrs
@@ -11,7 +10,6 @@ from vistautils.range import Range
 
 from Pegasus.DAX3 import Job, Namespace, Profile
 from saga_tools.slurm import to_slurm_memory_string
-
 from typing_extensions import Protocol
 
 
@@ -33,7 +31,7 @@ class ResourceRequest(Protocol):
     partition: str
 
     @abstractmethod
-    def apply_to_job(self, job: Job, *, log_file: Path, job_name: str) -> None:
+    def apply_to_job(self, job: Job, *, job_name: str) -> None:
         """
         Applies the appropriate settings to *job*
         to account for the requested resources.
@@ -105,7 +103,7 @@ class SlurmResourceRequest(ResourceRequest):
             num_gpus=other.num_gpus if other.num_gpus is not None else self.num_gpus,
         )
 
-    def apply_to_job(self, job: Job, *, log_file: Path, job_name: str) -> None:
+    def apply_to_job(self, job: Job, *, job_name: str) -> None:
         if not self.partition:
             raise RuntimeError("A partition to run on must be specified.")
 
@@ -123,7 +121,6 @@ class SlurmResourceRequest(ResourceRequest):
             mem_str=to_slurm_memory_string(
                 self.memory if self.memory else _SLURM_DEFAULT_MEMORY
             ),
-            stdout_log_path=log_file,
         )
         job.addProfile(
             Profile(Namespace.PEGASUS, "glite.arguments", slurm_resource_content)
@@ -132,5 +129,6 @@ class SlurmResourceRequest(ResourceRequest):
 
 SLURM_RESOURCE_STRING = """--{qos_or_account} --partition {partition} --ntasks 1
  --cpus-per-task {num_cpus} --gpus-per-task {num_gpus} --job-name {job_name} --mem {mem_str}
- --output={stdout_log_path}"""
+ """
+
 _BACKEND_PARAM = "backend"

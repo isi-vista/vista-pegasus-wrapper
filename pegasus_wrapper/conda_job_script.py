@@ -17,11 +17,15 @@ from saga_tools.spack import SpackConfiguration
 def main(params: Parameters):
     conda_script_generator = CondaJobScriptGenerator.from_parameters(params)
     entry_point = params.string("entry_point")
+    work_dir = params.optional_creatable_directory("working_directory") or Path(
+        os.getcwd()
+    )
+    stdout_file = params.string("log_file") or work_dir / "___stdout.log"
     shell_script = conda_script_generator.generate_shell_script(
         entry_point_name=entry_point,
         param_file=params.existing_file("job_param_file"),
-        working_directory=params.optional_creatable_directory("working_directory")
-        or Path(os.getcwd()),
+        working_directory=work_dir,
+        stdout_file=stdout_file,
     )
 
     params.creatable_file("conda_script_path").write_text(  # type: ignore
@@ -88,6 +92,7 @@ class CondaJobScriptGenerator:
         param_file: Path,
         *,
         working_directory: Path,
+        stdout_file: Path,
         ckpt_path: Optional[Path] = None,
         override_conda_config: Optional[CondaConfiguration] = None,
     ) -> str:
@@ -112,6 +117,7 @@ class CondaJobScriptGenerator:
             entry_point=entry_point_name,
             param_file=param_file,
             ckpt_line=f"touch {ckpt_path.absolute()}" if ckpt_path else "",
+            stdout_file=stdout_file,
         )
 
     def write_shell_script_to(
@@ -122,6 +128,7 @@ class CondaJobScriptGenerator:
         working_directory: Path,
         script_path: Path,
         params_path: Optional[Path],
+        stdout_file: Optional[Path] = None,
         ckpt_path: Optional[Path] = None,
         override_conda_config: Optional[CondaConfiguration] = None,
     ) -> None:
@@ -143,10 +150,14 @@ class CondaJobScriptGenerator:
                 f"but got {parameters}"
             )
 
+        if not stdout_file:
+            stdout_file = working_directory / "___stdout.log"
+
         script_path.write_text(
             self.generate_shell_script(
                 entry_point_name=entry_point_name,
                 param_file=params_path,
+                stdout_file=stdout_file,
                 working_directory=working_directory,
                 ckpt_path=ckpt_path,
                 override_conda_config=override_conda_config,
@@ -172,7 +183,7 @@ fi
 cd {working_directory}
 echo `which python`
 echo python -m {entry_point} {param_file}
-python -m {entry_point} {param_file}
+python -m {entry_point} {param_file} | tee {stdout_file}
 {ckpt_line}
 """
 

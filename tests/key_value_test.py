@@ -1,11 +1,11 @@
 from vistautils.parameters import Parameters
 
+from pegasus_wrapper import initialize_vista_pegasus_wrapper
 from pegasus_wrapper.key_value import (
     compose_key_value_store_transforms,
     transform_key_value_store,
 )
 from pegasus_wrapper.locator import Locator
-from pegasus_wrapper.workflow import WorkflowBuilder
 
 
 def test_composed_key_value_transform(tmp_path):
@@ -30,14 +30,11 @@ def test_composed_key_value_transform(tmp_path):
             "partition": "scavenge",
         }
     )
-    workflow_builder = WorkflowBuilder.from_params(params)
+
+    initialize_vista_pegasus_wrapper(params)
 
     transformed_kvs = transform_key_value_store(
-        kvs,
-        composed_transforms,
-        output_locator=Locator([]),
-        workflow_builder=workflow_builder,
-        parallelism=1,
+        kvs, composed_transforms, output_locator=Locator([]), parallelism=1
     )
 
     expected_kvs = {"doc1": 4, "doc2": 9}

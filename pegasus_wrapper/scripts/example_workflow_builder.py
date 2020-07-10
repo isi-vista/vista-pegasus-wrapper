@@ -12,8 +12,7 @@ from pegasus_wrapper import (
 from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.pegasus_utils import build_submit_script
-from pegasus_wrapper.resource_request import SlurmResourceRequest
-from scripts import multiply_by_x, sort_nums_in_file
+from pegasus_wrapper.scripts import multiply_by_x, sort_nums_in_file
 
 
 def example_workflow(params: Parameters):
@@ -33,14 +32,10 @@ def example_workflow(params: Parameters):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
         }
     )
 
-    # Basic slurm resource request params
-    slurm_params = Parameters.from_mapping(
-        {"partition": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "1G"}
-    )
+    workflow_params = workflow_params.unify(params)
 
     # Our source input for the sample jobs
     multiply_input_file = tmp_path / "raw_nums.txt"
@@ -59,7 +54,6 @@ def example_workflow(params: Parameters):
     with multiply_input_file.open("w") as mult_file:
         mult_file.writelines(f"{num}\n" for num in nums)
 
-    resources = SlurmResourceRequest.from_parameters(slurm_params)
     initialize_vista_pegasus_wrapper(workflow_params)
 
     multiply_artifact = ValueArtifact(
@@ -69,8 +63,9 @@ def example_workflow(params: Parameters):
             multiply_by_x,
             {
                 "input_file": multiply_input_file,
-                "ouput_file": multiply_output_file,
+                "output_file": multiply_output_file,
                 "x": 4,
+                "logfile": str(tmp_path / "multiply_log.txt"),
             },
             depends_on=[],
         ),
@@ -82,7 +77,8 @@ def example_workflow(params: Parameters):
         sort_nums_in_file,
         {"input_file": multiply_output_file, "output_file": sorted_output_file},
         depends_on=[multiply_artifact],
-        resource_request=resources,
+        # if you want to use a different resource for some task, you can do this way
+        # resource_request=SlurmResourceRequest.from_parameters(slurm_params),
     )
 
     # Generate the Pegasus DAX file
@@ -90,7 +86,8 @@ def example_workflow(params: Parameters):
 
     submit_script = tmp_path / "submit_script.sh"
 
-    # Our attempt at an easy submit file, it MAY NOT be accurate for more complicated workflows but it
+    # Our attempt at an easy submit file, it MAY NOT be accurate for more complicated
+    # workflows but it
     # does work for this simple example.
     # See https://github.com/isi-vista/vista-pegasus-wrapper/issues/27
     build_submit_script(
