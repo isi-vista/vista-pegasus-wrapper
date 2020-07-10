@@ -63,6 +63,7 @@ class ResourceRequest(Protocol):
 
 
 _SLURM_DEFAULT_MEMORY = MemoryAmount.parse("2G")
+_DEFAULT_JOB_TIME_IN_MINUTES = 14400
 
 
 @attrs(frozen=True, slots=True)
@@ -84,7 +85,9 @@ class SlurmResourceRequest(ResourceRequest):
         validator=optional(in_(Range.at_least(0))), default=None, kw_only=True
     )
     job_time_in_minutes: Optional[int] = attrib(
-        validator=optional(instance_of(int)), default=1440, kw_only=True
+        validator=optional(instance_of(int)),
+        default=_DEFAULT_JOB_TIME_IN_MINUTES,
+        kw_only=True,
     )
 
     @staticmethod
@@ -135,7 +138,11 @@ class SlurmResourceRequest(ResourceRequest):
                 self.memory if self.memory else _SLURM_DEFAULT_MEMORY
             ),
             stdout_log_path=log_file,
-            time=self.convert_time_to_slurm_format(self.job_time_in_minutes),
+            time=self.convert_time_to_slurm_format(
+                self.job_time_in_minutes
+                if self.job_time_in_minutes
+                else _DEFAULT_JOB_TIME_IN_MINUTES
+            ),
         )
         logging.debug(
             "Slurm Resource Request for %s: %s", job_name, slurm_resource_content
