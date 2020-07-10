@@ -33,7 +33,7 @@ def example_workflow(params: Parameters):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
             "conda_environment": params.string("conda_environment"),
             "conda_base_path": str(
                 params.existing_directory("conda_base_path").absolute()
@@ -43,7 +43,7 @@ def example_workflow(params: Parameters):
 
     # Basic slurm resource request params
     slurm_params = Parameters.from_mapping(
-        {"partition": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "1G"}
+        {"partition": "gaia", "num_cpus": 1, "num_gpus": 0, "memory": "1G"}
     )
 
     # Our source input for the sample jobs

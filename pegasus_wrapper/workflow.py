@@ -233,7 +233,10 @@ class WorkflowBuilder:
 
         pegasus_conf_path = output_xml_dir / "pegasus.conf"
         pegasus_conf_path.write_text(
-            pkg_resources.read_text(resources, "pegasus.conf"), encoding="utf-8"
+            data=pkg_resources.read_text(resources, "pegasus.conf")
+            + "pegasus.catalog.replica=File\n"
+            + f"pegasus.catalog.replica.file={self._replica_catalog}\n",
+            encoding="utf-8",
         )
 
         return dax_file
