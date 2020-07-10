@@ -1,6 +1,5 @@
 # This script is for testing purposes only
 import logging
-import time
 
 from immutablecollections import immutableset
 from vistautils.parameters import Parameters
