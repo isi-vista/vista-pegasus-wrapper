@@ -98,7 +98,7 @@ def compose_key_value_store_transforms(
 
 
 def split_key_value_store(
-    input_store: KeyValueStore, *, num_parts: int
+    input_store: KeyValueStore, *, num_parts: int, random_seed: Optional[int] = None
 ) -> Tuple[KeyValueStore]:
     """
     Splits *input_store* into *num_parts* pieces of nearly equal size.
@@ -117,6 +117,7 @@ def split_key_value_store(
             {
                 "input": input_store.input_parameters(),
                 "num_slices": num_parts,
+                "random_seed": random_seed,
                 "output_dir": split_output_dir,
             }
         ),
