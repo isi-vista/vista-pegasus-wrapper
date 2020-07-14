@@ -62,7 +62,7 @@ class ResourceRequest(Protocol):
 
 
 _SLURM_DEFAULT_MEMORY = MemoryAmount.parse("2G")
-_DEFAULT_JOB_TIME_IN_MINUTES = 14400
+_DEFAULT_JOB_TIME_IN_MINUTES = 1440
 
 
 @attrs(frozen=True, slots=True)
