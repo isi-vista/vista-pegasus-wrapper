@@ -183,7 +183,7 @@ fi
 cd {working_directory}
 echo `which python`
 echo python -m {entry_point} {param_file}
-python -m {entry_point} {param_file} | tee {stdout_file}
+python -m {entry_point} {param_file} 2>&1 | tee {stdout_file}
 {ckpt_line}
 """
 
