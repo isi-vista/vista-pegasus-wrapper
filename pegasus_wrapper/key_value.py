@@ -110,18 +110,17 @@ def split_key_value_store(
 
     split_locator = input_store.locator / "split"
     split_output_dir = directory_for(split_locator)
+    params = Parameters.from_mapping(
+        {
+            "input": input_store.input_parameters(),
+            "num_slices": num_parts,
+            "output_dir": split_output_dir,
+        }
+    )
+    if random_seed:
+        params["random_seed"] = random_seed
     split_job = run_python_on_parameters(
-        split_locator,
-        split_entry_point,
-        Parameters.from_mapping(
-            {
-                "input": input_store.input_parameters(),
-                "num_slices": num_parts,
-                "random_seed": random_seed,
-                "output_dir": split_output_dir,
-            }
-        ),
-        depends_on=input_store,
+        split_locator, split_entry_point, params, depends_on=input_store
     )
     return tuple(
         ZipKeyValueStore(
