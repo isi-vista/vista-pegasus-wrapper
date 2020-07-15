@@ -171,6 +171,9 @@ class CondaJobScriptGenerator:
 CONDA_SCRIPT = """#!/usr/bin/env bash
 
 set -e
+# This is needed so the output redirect for the Python command doesn't
+# suppress the exit code of the Python process itself.
+set -o pipefail
 
 # This is needed because SLURM jobs are run from a non-interactive shell,
 # but conda expects PS1 (the prompt variable) to be set.
