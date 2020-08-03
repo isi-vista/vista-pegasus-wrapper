@@ -11,6 +11,7 @@ from vistautils.range import Range
 
 from Pegasus.DAX3 import Job, Namespace, Profile
 from saga_tools.slurm import to_slurm_memory_string
+
 from typing_extensions import Protocol
 
 SCAVENGE = "scavenge"
@@ -112,6 +113,9 @@ class SlurmResourceRequest(ResourceRequest):
             memory=other.memory if other.memory else self.memory,
             num_cpus=other.num_cpus if other.num_cpus else self.num_cpus,
             num_gpus=other.num_gpus if other.num_gpus is not None else self.num_gpus,
+            job_time_in_minutes=other.job_time_in_minutes
+            if other.job_time_in_minutes
+            else self.job_time_in_minutes,
         )
 
     def convert_time_to_slurm_format(self, job_time_in_minutes: int) -> str:
