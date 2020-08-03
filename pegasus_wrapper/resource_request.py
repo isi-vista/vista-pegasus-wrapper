@@ -112,6 +112,9 @@ class SlurmResourceRequest(ResourceRequest):
             memory=other.memory if other.memory else self.memory,
             num_cpus=other.num_cpus if other.num_cpus else self.num_cpus,
             num_gpus=other.num_gpus if other.num_gpus is not None else self.num_gpus,
+            job_time_in_minutes=other.job_time_in_minutes
+            if other.job_time_in_minutes is not None
+            else self.job_time_in_minutes,
         )
 
     def convert_time_to_slurm_format(self, job_time_in_minutes: int) -> str:
