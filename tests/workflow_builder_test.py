@@ -450,5 +450,5 @@ def test_category_max_jobs(tmp_path):
     # Make sure the config contains the appropriate maxJobs lines and no inappropriate maxJobs lines
     with config.open("r") as f:
         lines = f.readlines()
-    assert any("dagman.scavenge=1" in line for line in lines)
-    assert not any("dagman.ephemeral=" in line for line in lines)
+    assert any(["dagman.scavenge=1" in line for line in lines])
+    assert not any(["dagman.ephemeral=" in line for line in lines])
