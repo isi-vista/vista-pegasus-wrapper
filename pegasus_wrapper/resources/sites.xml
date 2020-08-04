@@ -33,7 +33,7 @@
         <profile namespace="condor" key="grid_resource">batch slurm</profile>
 
         <!-- Wall clock limit -->
-        <profile namespace="pegasus" key="runtime">14400</profile>
+        <profile namespace="pegasus" key="runtime">1440</profile>
 
         <!-- profile namespace="pegasus" key="job.aggregator">mpiexec</profile -->
         <!-- This profile tells Pegasus to create two clustered jobs
