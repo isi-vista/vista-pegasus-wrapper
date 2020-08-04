@@ -81,6 +81,14 @@ def run_python_on_parameters(
     )
 
 
+def limit_jobs_for_category(category: str, max_jobs: int):
+    """
+    Limit the number of jobs in the given category that can run concurrently to max_jobs.
+    """
+    _assert_singleton_workflow_builder()
+    return _SINGLETON_WORKFLOW_BUILDER.limit_jobs_for_category(category, max_jobs)
+
+
 def default_conda_configuration() -> CondaConfiguration:
     _assert_singleton_workflow_builder()
     return _SINGLETON_WORKFLOW_BUILDER.default_conda_configuration()
