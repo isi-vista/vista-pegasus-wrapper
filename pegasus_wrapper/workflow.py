@@ -186,7 +186,7 @@ class WorkflowBuilder:
 
         resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
         if category:
-            job.addProfile(Profile(Namespace.DAGMAN, "category", category))
+            job.profile(Namespace.DAGMAN, "category", category)
 
         # Handle Output Files
         # This is currently only handled as the checkpoint file
