@@ -1,9 +1,12 @@
 import subprocess
+import xml.sax as sax
+import xml.sax.handler as saxhandler
 from random import Random
 
 from immutablecollections import immutableset
 from vistautils.parameters import Parameters
 
+import pytest
 from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator, _parse_parts
 from pegasus_wrapper.pegasus_utils import build_submit_script
@@ -11,8 +14,6 @@ from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.scripts.multiply_by_x import main as multiply_by_x_main
 from pegasus_wrapper.scripts.sort_nums_in_file import main as sort_nums_main
 from pegasus_wrapper.workflow import WorkflowBuilder
-
-import pytest
 
 
 def test_simple_dax(tmp_path):
@@ -204,3 +205,250 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
 
     # Make sure the Replica Catalog is not empty
     assert replica_catalog.stat().st_size > 0
+
+
+class _JobWithNameHasCategoryHandler(saxhandler.ContentHandler):
+    """
+    SAX handler which checks whether a DAX file
+    specifies a job with a certain name and category
+    (specified respectively by `target_job_name` and `category`).
+    """
+
+    def __init__(self, target_job_name, category):
+        super().__init__()
+        self.target_job_name = target_job_name
+        self.category = category
+        self._in_target_job = False
+        self._in_target_job_category = False
+        self._job_category_content = []
+        self._job_has_category = False
+
+    def _element_is_target_job(self, name, attrs) -> bool:
+        return name == "job" and attrs.get("name") == self.target_job_name
+
+    @staticmethod
+    def _element_sets_job_category(name, attrs) -> bool:
+        return (
+            name == "profile"
+            and attrs.get("namespace") == "dagman"
+            and attrs.get("key") == "category"
+        )
+
+    def startElement(self, name, attrs):
+        if self._element_is_target_job(name, attrs):
+            self._in_target_job = True
+        elif self._in_target_job and self._element_sets_job_category(name, attrs):
+            self._in_target_job_category = True
+
+    def characters(self, content):
+        if self._in_target_job_category:
+            self._job_category_content.append(content)
+
+    def endElement(self, name):
+        # Assume jobs are never nested
+        if name == "job":
+            self._in_target_job = False
+        # If we just finished one of the target job's category profile tags, check if it specifies
+        # the expected category.
+        elif name == "profile" and self._in_target_job_category:
+            category = "".join(self._job_category_content).strip()
+            if category == self.category:
+                self._job_has_category = True
+            self._job_category_content = []
+            self._in_target_job_category = False
+
+    def job_had_target_category(self) -> bool:
+        return self._job_has_category
+
+
+def _job_in_dax_has_category(dax_file, target_job_locator, category):
+    """
+    Return whether the given DAX file has a job
+    corresponding to `target_job_locator`
+    which has the category `category`.
+    """
+    target_job_name = str(target_job_locator).replace("/", "_")
+    handler = _JobWithNameHasCategoryHandler(
+        target_job_name=target_job_name, category=category
+    )
+
+    with dax_file.open("r") as f:
+        sax.parse(f, handler=handler)
+
+    return handler.job_had_target_category()
+
+
+def test_dax_with_categories(tmp_path):
+    workflow_params = Parameters.from_mapping(
+        {
+            "workflow_name": "Test",
+            "workflow_created": "Testing",
+            "workflow_log_dir": str(tmp_path / "log"),
+            "workflow_directory": str(tmp_path / "working"),
+            "site": "saga",
+            "namespace": "test",
+            "partition": "scavenge",
+        }
+    )
+    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+
+    multiply_job_name = Locator(_parse_parts("jobs/multiply"))
+    multiply_output_file = tmp_path / "multiplied_nums.txt"
+    multiply_input_file = tmp_path / "raw_nums.txt"
+    multiply_params = Parameters.from_mapping(
+        {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
+    )
+    multiply_job_category = "arithmetic"
+
+    workflow_builder.run_python_on_parameters(
+        multiply_job_name,
+        multiply_by_x_main,
+        multiply_params,
+        depends_on=[],
+        category=multiply_job_category,
+    )
+
+    # Check that the multiply job has the appropriate category set in the DAX file
+    dax_file = workflow_builder.write_dax_to_dir()
+    assert dax_file.exists()
+
+    assert _job_in_dax_has_category(dax_file, multiply_job_name, multiply_job_category)
+    assert not _job_in_dax_has_category(
+        dax_file, multiply_job_name, "an-arbitrary-category"
+    )
+
+
+def test_dax_with_saga_categories(tmp_path):
+    workflow_params = Parameters.from_mapping(
+        {
+            "workflow_name": "Test",
+            "workflow_created": "Testing",
+            "workflow_log_dir": str(tmp_path / "log"),
+            "workflow_directory": str(tmp_path / "working"),
+            "site": "saga",
+            "namespace": "test",
+            "partition": "scavenge",
+        }
+    )
+    multiply_partition = "scavenge"
+    multiply_slurm_params = Parameters.from_mapping(
+        {"partition": multiply_partition, "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+    )
+    multiply_resources = SlurmResourceRequest.from_parameters(multiply_slurm_params)
+    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+
+    multiply_job_name = Locator(_parse_parts("jobs/multiply"))
+    multiply_output_file = tmp_path / "multiplied_nums.txt"
+    multiply_input_file = tmp_path / "raw_nums.txt"
+    multiply_params = Parameters.from_mapping(
+        {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
+    )
+
+    multiply_artifact = ValueArtifact(
+        multiply_output_file,
+        depends_on=workflow_builder.run_python_on_parameters(
+            multiply_job_name,
+            multiply_by_x_main,
+            multiply_params,
+            depends_on=[],
+            resource_request=multiply_resources,
+        ),
+        locator=Locator("multiply"),
+    )
+
+    sort_partition = "ephemeral"
+    sort_slurm_params = Parameters.from_mapping(
+        {"partition": sort_partition, "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+    )
+    sort_resources = SlurmResourceRequest.from_parameters(sort_slurm_params)
+
+    sort_job_name = Locator(_parse_parts("jobs/sort"))
+    sorted_output_file = tmp_path / "sorted_nums.txt"
+    sort_params = Parameters.from_mapping(
+        {"input_file": multiply_output_file, "output_file": sorted_output_file}
+    )
+    workflow_builder.run_python_on_parameters(
+        sort_job_name,
+        sort_nums_main,
+        sort_params,
+        depends_on=[multiply_artifact],
+        resource_request=sort_resources,
+    )
+
+    dax_file = workflow_builder.write_dax_to_dir()
+    assert dax_file.exists()
+
+    # Check that the multiply and sort jobs have the appropriate partition-defined categories set in
+    # the DAX file
+    assert _job_in_dax_has_category(dax_file, multiply_job_name, multiply_partition)
+    assert not _job_in_dax_has_category(dax_file, multiply_job_name, "ephemeral")
+    assert _job_in_dax_has_category(dax_file, sort_job_name, multiply_partition)
+    assert not _job_in_dax_has_category(dax_file, sort_job_name, "scavenge")
+
+
+def test_category_max_jobs(tmp_path):
+    workflow_params = Parameters.from_mapping(
+        {
+            "workflow_name": "Test",
+            "workflow_created": "Testing",
+            "workflow_log_dir": str(tmp_path / "log"),
+            "workflow_directory": str(tmp_path / "working"),
+            "site": "saga",
+            "namespace": "test",
+            "partition": "scavenge",
+        }
+    )
+    multiply_slurm_params = Parameters.from_mapping(
+        {"partition": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+    )
+    multiply_resources = SlurmResourceRequest.from_parameters(multiply_slurm_params)
+    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+
+    multiply_job_name = Locator(_parse_parts("jobs/multiply"))
+    multiply_output_file = tmp_path / "multiplied_nums.txt"
+    multiply_input_file = tmp_path / "raw_nums.txt"
+    multiply_params = Parameters.from_mapping(
+        {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
+    )
+
+    multiply_artifact = ValueArtifact(
+        multiply_output_file,
+        depends_on=workflow_builder.run_python_on_parameters(
+            multiply_job_name,
+            multiply_by_x_main,
+            multiply_params,
+            depends_on=[],
+            resource_request=multiply_resources,
+        ),
+        locator=Locator("multiply"),
+    )
+
+    sort_slurm_params = Parameters.from_mapping(
+        {"partition": "ephemeral", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+    )
+    sort_resources = SlurmResourceRequest.from_parameters(sort_slurm_params)
+
+    sort_job_name = Locator(_parse_parts("jobs/sort"))
+    sorted_output_file = tmp_path / "sorted_nums.txt"
+    sort_params = Parameters.from_mapping(
+        {"input_file": multiply_output_file, "output_file": sorted_output_file}
+    )
+    workflow_builder.run_python_on_parameters(
+        sort_job_name,
+        sort_nums_main,
+        sort_params,
+        depends_on=[multiply_artifact],
+        resource_request=sort_resources,
+    )
+
+    workflow_builder.limit_jobs_for_category("scavenge", 1)
+    workflow_builder.write_dax_to_dir()
+
+    config = workflow_params.existing_directory("workflow_directory") / "pegasus.conf"
+    assert config.exists()
+
+    # Make sure the config contains the appropriate maxJobs lines and no inappropriate maxJobs lines
+    with config.open("r") as f:
+        lines = f.readlines()
+    assert any("dagman.scavenge=1" in line for line in lines)
+    assert not any("dagman.ephemeral=" in line for line in lines)
