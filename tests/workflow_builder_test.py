@@ -381,9 +381,9 @@ def test_dax_with_saga_categories(tmp_path):
     # Check that the multiply and sort jobs have the appropriate partition-defined categories set in
     # the DAX file
     assert _job_in_dax_has_category(dax_file, multiply_job_name, multiply_partition)
-    assert not _job_in_dax_has_category(dax_file, multiply_job_name, "ephemeral")
-    assert _job_in_dax_has_category(dax_file, sort_job_name, multiply_partition)
-    assert not _job_in_dax_has_category(dax_file, sort_job_name, "scavenge")
+    assert not _job_in_dax_has_category(dax_file, multiply_job_name, sort_partition)
+    assert _job_in_dax_has_category(dax_file, sort_job_name, sort_partition)
+    assert not _job_in_dax_has_category(dax_file, sort_job_name, multiply_partition)
 
 
 def test_category_max_jobs(tmp_path):
