@@ -60,9 +60,17 @@ The experiment directory can be (and ought to be) on such a drive, though.
 
 Partitions each have a max walltime associated with them. See the saga cluster wiki [here]("https://github.com/isi-vista/saga-cluster/wiki/How-to-use-the-SAGA-queue#partitions"). If you specify a partition with a `job_time_in_minutes` greater than that partition's max walltime, you will see an error. 
 
+## `Error parsing classad or job not found`
+
+An annoying error that says very little about what might be going on. In the past, has been associated with the workflow requesting too little memory resulting in an `OUT_OF_ME+` on SLURM. See Debugging Tricks/Tips for ways to confirm this.
+
 # Contributing
 
 Run `make precommit` before commiting.  
 
 If you are using PyCharm, please set your docstring format to "Google" and your unit test runner to "PyTest"
 in `Preferences | Tools | Python Integrated Tools`.
+
+## Debugging Tricks/Tips
+
+* Investigate reasons for why a job is in a certain state (like being held for way too long): `condor_q -long [job_id]`. You can get the job id by `pegasus-status -v [wfdir]`.
