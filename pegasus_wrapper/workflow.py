@@ -26,7 +26,7 @@ from pegasus_wrapper.pegasus_utils import (
 )
 from pegasus_wrapper.resource_request import ResourceRequest
 
-from Pegasus.DAX3 import ADAG, Executable, File, Job, Link
+from Pegasus.DAX3 import ADAG, Executable, File, Job, Link, Namespace, Profile
 from saga_tools.conda import CondaConfiguration
 
 try:
@@ -113,6 +113,7 @@ class WorkflowBuilder:
         depends_on,
         resource_request: Optional[ResourceRequest] = None,
         override_conda_config: Optional[CondaConfiguration] = None,
+        category: Optional[str] = None,
     ) -> DependencyNode:
         """
         Schedule a job to run the given *python_module* on the given *parameters*.
@@ -184,6 +185,8 @@ class WorkflowBuilder:
             resource_request = self.default_resource_request
 
         resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
+        if category:
+            job.addProfile(Profile(Namespace.DAGMAN, "category", category))
 
         # Handle Output Files
         # This is currently only handled as the checkpoint file
