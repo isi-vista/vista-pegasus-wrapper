@@ -447,7 +447,7 @@ def test_category_max_jobs(tmp_path):
     config = workflow_params.existing_directory("workflow_directory") / "pegasus.conf"
     assert config.exists()
 
-    # Make sure the config contains the appropriate maxJobs lines and no inappropriate maxJobs lines
+    # Make sure the config contains the appropriate maxjobs lines and no inappropriate maxjobs lines
     with config.open("r") as f:
         lines = f.readlines()
     assert any(["dagman.scavenge.maxjobs=1" in line for line in lines])
