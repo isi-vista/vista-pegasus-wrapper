@@ -11,6 +11,7 @@ from vistautils.range import Range
 
 from Pegasus.DAX3 import Job, Namespace, Profile
 from saga_tools.slurm import to_slurm_memory_string
+
 from typing_extensions import Protocol
 
 SCAVENGE = "scavenge"
