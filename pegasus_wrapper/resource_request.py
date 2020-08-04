@@ -152,9 +152,7 @@ class SlurmResourceRequest(ResourceRequest):
         job.addProfile(
             Profile(Namespace.PEGASUS, "glite.arguments", slurm_resource_content)
         )
-        job.addProfile(
-            Profile(Namespace.DAGMAN, "category", self.partition)
-        )
+        job.addProfile(Profile(Namespace.DAGMAN, "category", self.partition))
 
 
 SLURM_RESOURCE_STRING = """--{qos_or_account} --partition {partition} --ntasks 1

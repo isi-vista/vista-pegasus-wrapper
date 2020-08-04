@@ -15,6 +15,7 @@ from vistautils.class_utils import fully_qualified_name
 from vistautils.io_utils import CharSink
 from vistautils.parameters import Parameters, YAMLParametersWriter
 
+from Pegasus.DAX3 import ADAG, Executable, File, Job, Link, Namespace, Profile
 from pegasus_wrapper import resources
 from pegasus_wrapper.artifact import DependencyNode, _canonicalize_depends_on
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
@@ -25,8 +26,6 @@ from pegasus_wrapper.pegasus_utils import (
     path_to_pfn,
 )
 from pegasus_wrapper.resource_request import ResourceRequest
-
-from Pegasus.DAX3 import ADAG, Executable, File, Job, Link, Namespace, Profile
 from saga_tools.conda import CondaConfiguration
 
 try:
