@@ -15,6 +15,7 @@ from vistautils.class_utils import fully_qualified_name
 from vistautils.io_utils import CharSink
 from vistautils.parameters import Parameters, YAMLParametersWriter
 
+from Pegasus.DAX3 import ADAG, Executable, File, Job, Link, Namespace
 from pegasus_wrapper import resources
 from pegasus_wrapper.artifact import DependencyNode, _canonicalize_depends_on
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
@@ -25,8 +26,6 @@ from pegasus_wrapper.pegasus_utils import (
     path_to_pfn,
 )
 from pegasus_wrapper.resource_request import ResourceRequest
-
-from Pegasus.DAX3 import ADAG, Executable, File, Job, Link
 from saga_tools.conda import CondaConfiguration
 
 try:
@@ -71,6 +70,7 @@ class WorkflowBuilder:
     _added_files: Set[File] = attrib(init=False, factory=set)
     # Path to the replica catalog to store checkpointed files
     _replica_catalog: Path = attrib(validator=instance_of(Path))
+    _category_to_max_jobs: Dict[str, int] = attrib(factory=dict)
 
     @staticmethod
     def from_parameters(params: Parameters) -> "WorkflowBuilder":
@@ -113,6 +113,7 @@ class WorkflowBuilder:
         depends_on,
         resource_request: Optional[ResourceRequest] = None,
         override_conda_config: Optional[CondaConfiguration] = None,
+        category: Optional[str] = None,
     ) -> DependencyNode:
         """
         Schedule a job to run the given *python_module* on the given *parameters*.
@@ -183,6 +184,8 @@ class WorkflowBuilder:
         else:
             resource_request = self.default_resource_request
 
+        if category:
+            job.profile(Namespace.DAGMAN, "category", category)
         resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
 
         # Handle Output Files
@@ -214,6 +217,21 @@ class WorkflowBuilder:
         logging.info("Scheduled Python job %s", job_name)
         return dependency_node
 
+    def limit_jobs_for_category(self, category: str, max_jobs: int):
+        """
+        Limit the number of jobs in the given category that can run concurrently to max_jobs.
+        """
+        self._category_to_max_jobs[category] = max_jobs
+
+    def _conf_limits(self) -> str:
+        """
+        Return a Pegasus config string which sets the max jobs per category appropriately.
+        """
+        return "".join(
+            f"dagman.{category}.maxjobs={max_jobs}\n"
+            for category, max_jobs in self._category_to_max_jobs.items()
+        )
+
     def write_dax_to_dir(self, output_xml_dir: Optional[Path] = None) -> Path:
         if not output_xml_dir:
             output_xml_dir = self._workflow_directory
@@ -237,7 +255,8 @@ class WorkflowBuilder:
         pegasus_conf_path.write_text(
             data=pkg_resources.read_text(resources, "pegasus.conf")
             + "pegasus.catalog.replica=File\n"
-            + f"pegasus.catalog.replica.file={self._replica_catalog}\n",
+            + f"pegasus.catalog.replica.file={self._replica_catalog}\n"
+            + self._conf_limits(),
             encoding="utf-8",
         )
 

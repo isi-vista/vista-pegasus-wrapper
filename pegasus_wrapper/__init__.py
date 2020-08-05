@@ -24,7 +24,6 @@ from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.resource_request import ResourceRequest
 from pegasus_wrapper.version import version as __version__  # noqa
 from pegasus_wrapper.workflow import WorkflowBuilder
-
 from saga_tools.conda import CondaConfiguration
 
 _SINGLETON_WORKFLOW_BUILDER: WorkflowBuilder = None  # type: ignore
@@ -79,6 +78,14 @@ def run_python_on_parameters(
         resource_request=resource_request,
         override_conda_config=override_conda_config,
     )
+
+
+def limit_jobs_for_category(category: str, max_jobs: int):
+    """
+    Limit the number of jobs in the given category that can run concurrently to max_jobs.
+    """
+    _assert_singleton_workflow_builder()
+    return _SINGLETON_WORKFLOW_BUILDER.limit_jobs_for_category(category, max_jobs)
 
 
 def default_conda_configuration() -> CondaConfiguration:
