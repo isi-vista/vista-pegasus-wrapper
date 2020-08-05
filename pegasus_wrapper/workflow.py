@@ -15,7 +15,7 @@ from vistautils.class_utils import fully_qualified_name
 from vistautils.io_utils import CharSink
 from vistautils.parameters import Parameters, YAMLParametersWriter
 
-from Pegasus.DAX3 import ADAG, Executable, File, Job, Link, Namespace
+from Pegasus.DAX3 import ADAG, Executable, File, Job, Link, Namespace, Profile
 from pegasus_wrapper import resources
 from pegasus_wrapper.artifact import DependencyNode, _canonicalize_depends_on
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
@@ -184,9 +184,9 @@ class WorkflowBuilder:
         else:
             resource_request = self.default_resource_request
 
-        resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
         if category:
             job.profile(Namespace.DAGMAN, "category", category)
+        resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
 
         # Handle Output Files
         # This is currently only handled as the checkpoint file
