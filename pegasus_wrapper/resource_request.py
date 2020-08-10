@@ -89,6 +89,7 @@ class SlurmResourceRequest(ResourceRequest):
         default=_DEFAULT_JOB_TIME_IN_MINUTES,
         kw_only=True,
     )
+    exclude_list: Optional[str] = attrib(validator=optional(instance_of(str)), kw_only=True, default=None)
 
     @staticmethod
     def from_parameters(params: Parameters) -> ResourceRequest:
@@ -100,6 +101,7 @@ class SlurmResourceRequest(ResourceRequest):
             if "memory" in params
             else None,
             job_time_in_minutes=params.optional_integer("job_time_in_minutes"),
+            exclude_list=params.optional_string("exclude_list")
         )
 
     def unify(self, other: ResourceRequest) -> ResourceRequest:
@@ -125,7 +127,7 @@ class SlurmResourceRequest(ResourceRequest):
     def apply_to_job(self, job: Job, *, job_name: str) -> None:
         if not self.partition:
             raise RuntimeError("A partition to run on must be specified.")
-
+        exclude_list = self.exclude_list
         qos_or_account = (
             f"qos {self.partition}"
             if self.partition in (SCAVENGE, EPHEMERAL)
@@ -146,6 +148,10 @@ class SlurmResourceRequest(ResourceRequest):
                 else _DEFAULT_JOB_TIME_IN_MINUTES
             ),
         )
+
+        if exclude_list:
+            slurm_resource_content += f" --exclude={exclude_list}"
+
         logging.debug(
             "Slurm Resource Request for %s: %s", job_name, slurm_resource_content
         )
