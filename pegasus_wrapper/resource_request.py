@@ -11,7 +11,6 @@ from vistautils.range import Range
 
 from Pegasus.DAX3 import Job, Namespace, Profile
 from saga_tools.slurm import to_slurm_memory_string
-
 from typing_extensions import Protocol
 
 SCAVENGE = "scavenge"
@@ -89,7 +88,18 @@ class SlurmResourceRequest(ResourceRequest):
         default=_DEFAULT_JOB_TIME_IN_MINUTES,
         kw_only=True,
     )
-    exclude_list: Optional[str] = attrib(validator=optional(instance_of(str)), kw_only=True, default=None)
+    exclude_list: Optional[str] = attrib(
+        validator=optional(instance_of(str)), kw_only=True, default=None
+    )
+    run_on_single_node: Optional[str] = attrib(
+        validator=optional(instance_of(str)), kw_only=True, default=None
+    )
+
+    @run_on_single_node.validator
+    def check(self, attribute, value: str):
+        if value:
+            if len(value.split(",")) != 1:
+                raise ValueError("run_on_single_node parameter must provide only node!")
 
     @staticmethod
     def from_parameters(params: Parameters) -> ResourceRequest:
@@ -101,7 +111,8 @@ class SlurmResourceRequest(ResourceRequest):
             if "memory" in params
             else None,
             job_time_in_minutes=params.optional_integer("job_time_in_minutes"),
-            exclude_list=params.optional_string("exclude_list")
+            exclude_list=params.optional_string("exclude_list"),
+            run_on_single_node=params.optional_string("run_on_single_node"),
         )
 
     def unify(self, other: ResourceRequest) -> ResourceRequest:
@@ -118,6 +129,8 @@ class SlurmResourceRequest(ResourceRequest):
             job_time_in_minutes=other.job_time_in_minutes
             if other.job_time_in_minutes
             else self.job_time_in_minutes,
+            exclude_list=other.exclude_list,
+            run_on_single_node=other.run_on_single_node,
         )
 
     def convert_time_to_slurm_format(self, job_time_in_minutes: int) -> str:
@@ -128,6 +141,8 @@ class SlurmResourceRequest(ResourceRequest):
         if not self.partition:
             raise RuntimeError("A partition to run on must be specified.")
         exclude_list = self.exclude_list
+        run_on_single_node = self.run_on_single_node
+
         qos_or_account = (
             f"qos {self.partition}"
             if self.partition in (SCAVENGE, EPHEMERAL)
@@ -149,8 +164,16 @@ class SlurmResourceRequest(ResourceRequest):
             ),
         )
 
+        if exclude_list and run_on_single_node:
+            raise ValueError(
+                "Only one of the 'exclude_list' or 'run_on_single_node' can be supplied at once."
+            )
+
         if exclude_list:
             slurm_resource_content += f" --exclude={exclude_list}"
+
+        if run_on_single_node:
+            slurm_resource_content += f" --nodelist={run_on_single_node}"
 
         logging.debug(
             "Slurm Resource Request for %s: %s", job_name, slurm_resource_content

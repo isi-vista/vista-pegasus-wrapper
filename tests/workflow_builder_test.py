@@ -1,4 +1,5 @@
 import subprocess
+import xml.etree.ElementTree as ET
 import xml.sax as sax
 import xml.sax.handler as saxhandler
 from random import Random
@@ -6,7 +7,6 @@ from random import Random
 from immutablecollections import immutableset
 from vistautils.parameters import Parameters
 
-import pytest
 from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator, _parse_parts
 from pegasus_wrapper.pegasus_utils import build_submit_script
@@ -14,6 +14,8 @@ from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.scripts.multiply_by_x import main as multiply_by_x_main
 from pegasus_wrapper.scripts.sort_nums_in_file import main as sort_nums_main
 from pegasus_wrapper.workflow import WorkflowBuilder
+
+import pytest
 
 
 def test_simple_dax(tmp_path):
@@ -452,3 +454,81 @@ def test_category_max_jobs(tmp_path):
         lines = f.readlines()
     assert any(["dagman.scavenge.maxjobs=1" in line for line in lines])
     assert not any(["dagman.ephemeral.maxjobs=" in line for line in lines])
+
+
+def test_dax_test_exclude_nodes_on_saga(tmp_path):
+
+    sample_exclude = "saga01,saga03,saga21,saga05"
+    sample_include = "saga03"
+
+    params = Parameters.from_mapping(
+        {
+            "workflow_name": "Test",
+            "workflow_created": "Testing",
+            "workflow_log_dir": str(tmp_path / "log"),
+            "workflow_directory": str(tmp_path / "working"),
+            "site": "saga",
+            "namespace": "test",
+            "partition": "scavenge",
+            "exclude_list": sample_exclude,
+        }
+    )
+    slurm_params = Parameters.from_mapping(
+        {"partition": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+    )
+    multiply_input_file = tmp_path / "raw_nums.txt"
+    random = Random()
+    random.seed(0)
+    nums = immutableset(int(random.random() * 100) for _ in range(0, 25))
+    multiply_output_file = tmp_path / "multiplied_nums.txt"
+    sorted_output_file = tmp_path / "sorted_nums.txt"
+    with multiply_input_file.open("w") as mult_file:
+        mult_file.writelines(f"{num}\n" for num in nums)
+    multiply_params = Parameters.from_mapping(
+        {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
+    )
+    sort_params = Parameters.from_mapping(
+        {"input_file": multiply_output_file, "output_file": sorted_output_file}
+    )
+
+    resources = SlurmResourceRequest.from_parameters(
+        slurm_params.unify({"run_on_single_node": sample_include})
+    )
+    workflow_builder = WorkflowBuilder.from_parameters(params)
+
+    multiply_job_locator = Locator(_parse_parts("jobs/multiply"))
+    multiply_artifact = ValueArtifact(
+        multiply_output_file,
+        depends_on=workflow_builder.run_python_on_parameters(
+            multiply_job_locator, multiply_by_x_main, multiply_params, depends_on=[]
+        ),
+        locator=Locator("multiply"),
+    )
+    sort_job_locator = Locator(_parse_parts("jobs/sort"))
+    workflow_builder.run_python_on_parameters(
+        sort_job_locator,
+        sort_nums_main,
+        sort_params,
+        depends_on=[multiply_artifact],
+        resource_request=resources,
+    )
+
+    dax_file = workflow_builder.write_dax_to_dir(tmp_path)
+    tree = ET.parse(dax_file.absolute())
+    root = tree.getroot()
+
+    for item in root:
+        if item.tag.endswith("job"):
+            for item2 in item.getchildren():
+                if item2.tag.endswith("profile"):
+                    if item2.attrib["namespace"] == "pegasus":
+                        if item.attrib["name"] == "jobs_multiply":
+                            assert f"--exclude={sample_exclude}" in item2.text
+                            assert f"--nodelist={sample_include}" not in item2.text
+                        elif item.attrib["name"] == "jobs_sort":
+                            assert f"--exclude=" not in item2.text
+                            assert f"--nodelist={sample_include}" in item2.text
+                        else:
+                            assert False
+
+    return tree
