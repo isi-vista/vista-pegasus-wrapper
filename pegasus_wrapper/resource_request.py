@@ -96,7 +96,7 @@ class SlurmResourceRequest(ResourceRequest):
     )
 
     @run_on_single_node.validator
-    def check(self, *, value: str):
+    def check(self, _, value: str):
         if value:
             if len(value.split(",")) != 1:
                 raise ValueError("run_on_single_node parameter must provide only node!")

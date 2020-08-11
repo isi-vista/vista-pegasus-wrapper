@@ -487,6 +487,7 @@ def test_dax_test_exclude_nodes_on_saga(tmp_path):
     multiply_params = Parameters.from_mapping(
         {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
     )
+
     sort_params = Parameters.from_mapping(
         {"input_file": multiply_output_file, "output_file": sorted_output_file}
     )
