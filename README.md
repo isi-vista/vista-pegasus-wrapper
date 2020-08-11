@@ -48,6 +48,14 @@ Our current system places `ckpt` files to indicate that a job has finished in th
 A [Nuke Checkpoints](scripts/nuke_checkpoints.py) script is provided for ease of removing checkpoint files. To use, pass a directory location as the launch parameter and the script will remove checkpoint files from the directory and all sub-directories.
 
 # FAQ
+## How can I exclude some nodes?
+
+You can use the exclude_list parameter as a workflow parameter (or resource parameter) to exclude some nodes. This is useful if some nodes are not properly configured or donot have the features you expect but otherwise are ready to be used.
+
+## How can I run my pipeline on one specific node?
+Use run_on_single_node parameter when you initialize a workflow (or a Slurm resource) to specify a single node to run your pipeline (or a single step of your pipeline) on a single node. 
+* Note you cannot use this option with the **exclude_list** option.
+* Note you cannot specify more than one node using this option.
 
 ## What are valid root directories for the workflow?
 
@@ -60,17 +68,9 @@ The experiment directory can be (and ought to be) on such a drive, though.
 
 Partitions each have a max walltime associated with them. See the saga cluster wiki [here]("https://github.com/isi-vista/saga-cluster/wiki/How-to-use-the-SAGA-queue#partitions"). If you specify a partition with a `job_time_in_minutes` greater than that partition's max walltime, you will see an error. 
 
-## `Error parsing classad or job not found`
-
-An annoying error that says very little about what might be going on. In the past, has been associated with the workflow requesting too little memory resulting in an `OUT_OF_ME+` on SLURM. See Debugging Tricks/Tips for ways to confirm this.
-
 # Contributing
 
 Run `make precommit` before commiting.  
 
 If you are using PyCharm, please set your docstring format to "Google" and your unit test runner to "PyTest"
 in `Preferences | Tools | Python Integrated Tools`.
-
-## Debugging Tricks/Tips
-
-* Investigate reasons for why a job is in a certain state (like being held for way too long): `condor_q -long [job_id]`. You can get the job id by `pegasus-status -v [wfdir]`.
