@@ -129,8 +129,10 @@ class SlurmResourceRequest(ResourceRequest):
             job_time_in_minutes=other.job_time_in_minutes
             if other.job_time_in_minutes
             else self.job_time_in_minutes,
-            exclude_list=other.exclude_list,
-            run_on_single_node=other.run_on_single_node,
+            exclude_list=other.exclude_list if other.exclude_list else self.exclude_list,
+            run_on_single_node=other.run_on_single_node
+            if other.run_on_single_node
+            else self.run_on_single_node,
         )
 
     def convert_time_to_slurm_format(self, job_time_in_minutes: int) -> str:
@@ -140,8 +142,6 @@ class SlurmResourceRequest(ResourceRequest):
     def apply_to_job(self, job: Job, *, job_name: str) -> None:
         if not self.partition:
             raise RuntimeError("A partition to run on must be specified.")
-        exclude_list = self.exclude_list
-        run_on_single_node = self.run_on_single_node
 
         qos_or_account = (
             f"qos {self.partition}"
@@ -164,16 +164,17 @@ class SlurmResourceRequest(ResourceRequest):
             ),
         )
 
-        if exclude_list and run_on_single_node:
-            raise ValueError(
-                "Only one of the 'exclude_list' or 'run_on_single_node' can be supplied at once."
-            )
+        if self.exclude_list and self.run_on_single_node:
+            if self.run_on_single_node in self.exclude_list:
+                raise ValueError(
+                    "the 'exclude_list' and 'run_on_single_node' options are not consistent."
+                )
 
-        if exclude_list:
-            slurm_resource_content += f" --exclude={exclude_list}"
+        if self.exclude_list:
+            slurm_resource_content += f" --exclude={self.exclude_list}"
 
-        if run_on_single_node:
-            slurm_resource_content += f" --nodelist={run_on_single_node}"
+        if self.run_on_single_node:
+            slurm_resource_content += f" --nodelist={self.run_on_single_node}"
 
         logging.debug(
             "Slurm Resource Request for %s: %s", job_name, slurm_resource_content

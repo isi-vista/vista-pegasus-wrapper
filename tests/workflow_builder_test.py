@@ -459,7 +459,7 @@ def test_category_max_jobs(tmp_path):
 def test_dax_test_exclude_nodes_on_saga(tmp_path):
 
     sample_exclude = "saga01,saga03,saga21,saga05"
-    sample_include = "saga03"
+    sample_include = "saga06"
 
     params = Parameters.from_mapping(
         {
@@ -525,9 +525,8 @@ def test_dax_test_exclude_nodes_on_saga(tmp_path):
                     if item2.attrib["namespace"] == "pegasus":
                         if item.attrib["name"] == "jobs_multiply":
                             assert f"--exclude={sample_exclude}" in item2.text
-                            assert f"--nodelist={sample_include}" not in item2.text
                         elif item.attrib["name"] == "jobs_sort":
-                            assert f"--exclude=" not in item2.text
+                            assert f"--exclude=" in item2.text
                             assert f"--nodelist={sample_include}" in item2.text
                         else:
                             assert False
