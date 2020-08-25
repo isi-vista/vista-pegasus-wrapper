@@ -152,9 +152,9 @@ useful.
          -  The wrapper infers the correct account or QOS to specify
             based on the partition name. If you specify
             ``partition: mics`` then it will specify
-            ``--partition mics`` :literal:`--``account mics`. Likewise,
+            ``--partition mics`` :literal:`--account mics`. Likewise,
             if you specify ``partition: ephemeral`` then it will specify
-            ``--partition ephemeral`` :literal:`--``qos ephemeral`.
+            ``--partition ephemeral`` :literal:`--qos ephemeral`.
          -  You can’t override the inferred account or QOS.
 
    -  ``num_cpus``
