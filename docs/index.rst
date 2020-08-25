@@ -7,6 +7,8 @@ Welcome to pegasus_wrapper's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   api_overview
+
 .. autosummary::
    :toctree: _autosummary
 
