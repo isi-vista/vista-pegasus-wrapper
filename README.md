@@ -68,6 +68,10 @@ The experiment directory can be (and ought to be) on such a drive, though.
 
 Partitions each have a max walltime associated with them. See the saga cluster wiki [here]("https://github.com/isi-vista/saga-cluster/wiki/How-to-use-the-SAGA-queue#partitions"). If you specify a partition with a `job_time_in_minutes` greater than that partition's max walltime, you will see an error. 
 
+## Modifying code while pipeline runs
+
+If you change code while a pipeline is runnning, the jobs will pick up the changes. This could be helpful if you notice an error and fix it before that code runs, but can also lead to some unexpected behavior.
+
 # Contributing
 
 Run `make precommit` before commiting.  
