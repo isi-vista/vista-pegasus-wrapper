@@ -106,9 +106,12 @@ class WorkflowBuilder:
         return ret
 
     def _job_name_for(self, locator: Locator) -> str:
-        locater_as_name = str(locator).replace('/', '_')
-        return f"{self._experiment_name}_{locater_as_name}" if self._experiment_name else locater_as_name
-            
+        locater_as_name = str(locator).replace("/", "_")
+        return (
+            f"{self._experiment_name}_{locater_as_name}"
+            if self._experiment_name
+            else locater_as_name
+        )
 
     def run_python_on_parameters(
         self,

@@ -28,7 +28,7 @@ def test_simple_dax(tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "scavenge",
-            "experiment_name": "fred"
+            "experiment_name": "fred",
         }
     )
     workflow_builder = WorkflowBuilder.from_parameters(params)
@@ -42,7 +42,7 @@ def test_simple_dax(tmp_path):
     assert workflow_builder._default_site == "saga"  # pylint:disable=protected-access
     assert workflow_builder.default_resource_request  # pylint:disable=protected-access
     assert workflow_builder._job_graph is not None  # pylint:disable=protected-access
-    assert workflow_builder._experiment_name == "fred" # pylint:disable=protected-access
+    assert workflow_builder._experiment_name == "fred"  # pylint:disable=protected-access
 
 
 def test_locator():
@@ -66,7 +66,7 @@ def test_dax_with_job_on_saga(tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "scavenge",
-            "experiment_name": "fred"
+            "experiment_name": "fred",
         }
     )
     slurm_params = Parameters.from_mapping(
