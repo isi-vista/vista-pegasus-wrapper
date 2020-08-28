@@ -163,11 +163,14 @@ class SlurmResourceRequest(ResourceRequest):
             ),
         )
 
-        if self.exclude_list and self.run_on_single_node:
-            if self.run_on_single_node in self.exclude_list:
-                raise ValueError(
-                    "the 'exclude_list' and 'run_on_single_node' options are not consistent."
-                )
+        if (
+            self.exclude_list
+            and self.run_on_single_node
+            and self.run_on_single_node in self.exclude_list
+        ):
+            raise ValueError(
+                "the 'exclude_list' and 'run_on_single_node' options are not consistent."
+            )
 
         if self.exclude_list:
             slurm_resource_content += f" --exclude={self.exclude_list}"

@@ -72,7 +72,9 @@ class WorkflowBuilder:
     # Path to the replica catalog to store checkpointed files
     _replica_catalog: Path = attrib(validator=instance_of(Path))
     _category_to_max_jobs: Dict[str, int] = attrib(factory=dict)
-    # Call include an experiment_name so that jobs are more identifiable on SAGA
+    # Include an experiment_name so that jobs are more identifiable on SAGA,
+    # opting for experiment_name over workflow_name bc of VISTA's use of
+    # the same or similar workflow with multiple experiments
     _experiment_name: str = attrib(kw_only=True, default="")
 
     @staticmethod
