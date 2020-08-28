@@ -97,9 +97,8 @@ class SlurmResourceRequest(ResourceRequest):
 
     @run_on_single_node.validator
     def check(self, _, value: str):
-        if value:
-            if len(value.split(",")) != 1:
-                raise ValueError("run_on_single_node parameter must provide only node!")
+        if value and len(value.split(",")) != 1:
+            raise ValueError("run_on_single_node parameter must provide only node!")
 
     @staticmethod
     def from_parameters(params: Parameters) -> ResourceRequest:
@@ -164,11 +163,14 @@ class SlurmResourceRequest(ResourceRequest):
             ),
         )
 
-        if self.exclude_list and self.run_on_single_node:
-            if self.run_on_single_node in self.exclude_list:
-                raise ValueError(
-                    "the 'exclude_list' and 'run_on_single_node' options are not consistent."
-                )
+        if (
+            self.exclude_list
+            and self.run_on_single_node
+            and self.run_on_single_node in self.exclude_list
+        ):
+            raise ValueError(
+                "the 'exclude_list' and 'run_on_single_node' options are not consistent."
+            )
 
         if self.exclude_list:
             slurm_resource_content += f" --exclude={self.exclude_list}"

@@ -72,6 +72,10 @@ class WorkflowBuilder:
     # Path to the replica catalog to store checkpointed files
     _replica_catalog: Path = attrib(validator=instance_of(Path))
     _category_to_max_jobs: Dict[str, int] = attrib(factory=dict)
+    # Include an experiment_name so that jobs are more identifiable on SAGA,
+    # opting for experiment_name over workflow_name bc of VISTA's use of
+    # the same or similar workflow with multiple experiments
+    _experiment_name: str = attrib(kw_only=True, default="")
 
     @staticmethod
     def from_parameters(params: Parameters) -> "WorkflowBuilder":
@@ -90,6 +94,7 @@ class WorkflowBuilder:
             conda_script_generator=CondaJobScriptGenerator.from_parameters(params),
             namespace=params.string("namespace"),
             default_resource_request=ResourceRequest.from_parameters(params),
+            experiment_name=params.string("experiment_name", default=""),
             replica_catalog=replica_catalog,
         )
 
@@ -103,7 +108,12 @@ class WorkflowBuilder:
         return ret
 
     def _job_name_for(self, locator: Locator) -> str:
-        return str(locator).replace("/", "_")
+        locater_as_name = str(locator).replace("/", "_")
+        return (
+            f"{self._experiment_name}_{locater_as_name}"
+            if self._experiment_name
+            else locater_as_name
+        )
 
     def run_python_on_parameters(
         self,
@@ -164,7 +174,7 @@ class WorkflowBuilder:
         )
         script_executable = Executable(
             namespace=self._namespace,
-            name=str(job_name).replace("/", "_"),
+            name=self._job_name_for(job_name),
             version="4.0",
             os="linux",
             arch="x86_64",

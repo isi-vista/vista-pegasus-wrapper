@@ -28,6 +28,7 @@ def test_simple_dax(tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "scavenge",
+            "experiment_name": "fred",
         }
     )
     workflow_builder = WorkflowBuilder.from_parameters(params)
@@ -41,6 +42,7 @@ def test_simple_dax(tmp_path):
     assert workflow_builder._default_site == "saga"  # pylint:disable=protected-access
     assert workflow_builder.default_resource_request  # pylint:disable=protected-access
     assert workflow_builder._job_graph is not None  # pylint:disable=protected-access
+    assert workflow_builder._experiment_name == "fred"  # pylint:disable=protected-access
 
 
 def test_locator():
@@ -64,6 +66,7 @@ def test_dax_with_job_on_saga(tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "scavenge",
+            "experiment_name": "fred",
         }
     )
     slurm_params = Parameters.from_mapping(
@@ -72,7 +75,7 @@ def test_dax_with_job_on_saga(tmp_path):
     multiply_input_file = tmp_path / "raw_nums.txt"
     random = Random()
     random.seed(0)
-    nums = immutableset(int(random.random() * 100) for _ in range(0, 25))
+    nums = immutableset(int(random.random() * 100) for _ in range(25))
     multiply_output_file = tmp_path / "multiplied_nums.txt"
     sorted_output_file = tmp_path / "sorted_nums.txt"
     with multiply_input_file.open("w") as mult_file:
@@ -88,6 +91,7 @@ def test_dax_with_job_on_saga(tmp_path):
     workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
+
     multiply_artifact = ValueArtifact(
         multiply_output_file,
         depends_on=workflow_builder.run_python_on_parameters(
