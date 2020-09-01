@@ -259,8 +259,8 @@ def explicit_train_dev_test_split(
                 "train": {"keys_file": train_ids.value, "output_file": train_zip},
                 "dev": {"keys_file": dev_ids.value, "output_file": dev_zip},
                 "test": {"keys_file": test_ids.value, "output_file": test_zip},
-                "must_be_exhaustive": exhaustive,
             },
+            "must_be_exhaustive": exhaustive,
         },
         depends_on=[corpus],
     )
