@@ -32,7 +32,7 @@ To see the example workflow add a `root.params` file to the parameters directory
 ```
 example_root_dir: "path/to/output/dir/"
 ```
-run `python -m pegasus_wrapper.example_workflow_builder parameters/root.params` from this project's root folder.
+run `python -m pegasus_wrapper.scripts.example_workflow_builder parameters/root.params` from this project's root folder.
 
 The log output will provide you the output location of the `Text.dax` Assuming you are logged into a submit node with an active Pegasus install:
 
