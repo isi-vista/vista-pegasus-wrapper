@@ -26,7 +26,7 @@ Pegasus functions on a directed graph structure (a *DAX*) to manage the job depe
 This library simplifies the process of writing a profile which can be converted into a DAX for submission to the Pegasus controller.
 
 Using [WorkflowBuilder from `workflow.py`](pegasus_wrapper/workflow.py) develop a function to generate a `Workflow.dax`.
-See [example_workflow](scripts/example_workflow.py) for an extremely simple workflow which we will use to demonstrate the process.
+See [example_workflow](pegasus_wrapper/scripts/example_workflow_builder.py) for an extremely simple workflow which we will use to demonstrate the process.
 To see the example workflow add a `root.params` file to the parameters directory with the following:
 *Note the Directory should be in your $Home and not a NFS like /nas/gaia/ as the submission will fail for an NFS reason*
 ```
