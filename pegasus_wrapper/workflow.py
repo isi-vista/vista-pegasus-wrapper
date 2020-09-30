@@ -5,6 +5,7 @@ The user should typically not refer to these classes directly
 and should instead use the methods in the root of the package.
 """
 import logging
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, Optional, Set, Union
 
@@ -25,6 +26,7 @@ from pegasus_wrapper.pegasus_utils import (
     path_to_pfn,
 )
 from pegasus_wrapper.resource_request import ResourceRequest
+from pegasus_wrapper.scripts import nuke_checkpoints
 
 from Pegasus.DAX3 import ADAG, Executable, File, Job, Link, Namespace
 from saga_tools.conda import CondaConfiguration
@@ -246,6 +248,20 @@ class WorkflowBuilder:
     def write_dax_to_dir(self, output_xml_dir: Optional[Path] = None) -> Path:
         if not output_xml_dir:
             output_xml_dir = self._workflow_directory
+
+        num_jobs = len(self._job_graph.jobs.keys())
+        num_ckpts = len([ckpt_file for ckpt_file in output_xml_dir.rglob("___ckpt")])
+        if num_jobs == num_ckpts:
+            nuke = input(
+                "DAX *may* create a NOOP workflow. Do you want to nuke the checkpoints? [y/n]"
+            )
+            if nuke == "y":
+                subprocess.run(
+                    ["python", nuke_checkpoints.__file__, output_xml_dir],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    encoding="utf-8",
+                )
 
         dax_file_name = f"{self.name}.dax"
         dax_file = output_xml_dir / dax_file_name
