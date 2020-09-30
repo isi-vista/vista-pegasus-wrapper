@@ -253,7 +253,7 @@ class WorkflowBuilder:
         num_ckpts = len([ckpt_file for ckpt_file in output_xml_dir.rglob("___ckpt")])
         if num_jobs == num_ckpts:
             nuke = input(
-                "DAX will create a NOOP workflow. Do you want to nuke the checkpoints? [y/n]"
+                "DAX *may* create a NOOP workflow. Do you want to nuke the checkpoints? [y/n]"
             )
             if nuke == "y":
                 subprocess.run(
