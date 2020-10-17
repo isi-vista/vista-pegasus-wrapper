@@ -81,6 +81,10 @@ This is a weird one that pops up usually when first getting set up with Pegasus.
 4. `pip install git+https://github.com/pegasus-isi/pegasus/#egg=pegasus-wms.worker&subdirectory=packages/pegasus-worker`
 5. `pip install git+https://github.com/pegasus-isi/pegasus/#egg=pegasus-wms&subdirectory=packages/pegasus-python`
 
+## Debugging from `srun` fails to load `cuda` and `cudnn`
+
+A new node gotten with `srun` does not load the Spack modules you usually have set up in your runtime scripts. You need to manually install these if you want to work with Tensorflow or anything requiring Cuda.
+
 # Contributing
 
 Run `make precommit` before commiting.  
