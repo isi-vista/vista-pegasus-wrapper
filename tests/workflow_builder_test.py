@@ -627,8 +627,8 @@ def test_category_max_jobs(tmp_path):
     # Make sure the config contains the appropriate maxjobs lines and no inappropriate maxjobs lines
     with config.open("r") as f:
         lines = f.readlines()
-    assert any(["dagman.gaia.maxjobs=1" in line for line in lines])
-    assert not any(["dagman.ephemeral.maxjobs=" in line for line in lines])
+    assert any("dagman.gaia.maxjobs=1" in line for line in lines)
+    assert all("dagman.ephemeral.maxjobs=" not in line for line in lines)
 
 
 def test_dax_test_exclude_nodes_on_saga(tmp_path):

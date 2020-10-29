@@ -166,7 +166,7 @@ class SlurmResourceRequest(ResourceRequest):
 
         if self.partition.walltime < self.job_time_in_minutes:
             raise ValueError(
-                f"{self.partition.name} has a walltime of {self.partition.walltime}, which is less than the job time given: {self.job_time_in_minutes}"
+                f"{self.partition.name} has a walltime of {self.partition.walltime} mins, which is less than the time given ({self.job_time_in_minutes} mins) for job: {job_name}."
             )
 
         qos_or_account = (
