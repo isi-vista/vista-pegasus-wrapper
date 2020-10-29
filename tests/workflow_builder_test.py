@@ -10,11 +10,10 @@ from vistautils.parameters import Parameters
 from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator, _parse_parts
 from pegasus_wrapper.pegasus_utils import build_submit_script
-from pegasus_wrapper.resource_request import SlurmResourceRequest
+from pegasus_wrapper.resource_request import Partition, SlurmResourceRequest
 from pegasus_wrapper.scripts.multiply_by_x import main as multiply_by_x_main
 from pegasus_wrapper.scripts.sort_nums_in_file import main as sort_nums_main
 from pegasus_wrapper.workflow import WorkflowBuilder
-from pegasus_wrapper.resource_request import Partition
 
 import pytest
 
@@ -213,8 +212,9 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
     # Make sure the Replica Catalog is not empty
     assert replica_catalog.stat().st_size > 0
 
+
 def test_slurm_resources_partition_with_invalid_job_time_fail(tmp_path):
-    
+
     workflow_params = Parameters.from_mapping(
         {
             "workflow_name": "Test",
@@ -235,14 +235,14 @@ def test_slurm_resources_partition_with_invalid_job_time_fail(tmp_path):
     multiply_params = Parameters.from_mapping(
         {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
     )
-    
+
     slurm_params = Parameters.from_mapping(
         {
             "partition": "scavenge",
             "num_cpus": 1,
             "num_gpus": 0,
             "memory": "4G",
-            "job_time_in_minutes": 61
+            "job_time_in_minutes": 61,
         }
     )
 
@@ -252,12 +252,12 @@ def test_slurm_resources_partition_with_invalid_job_time_fail(tmp_path):
             multiply_by_x_main,
             multiply_params,
             resource_request=SlurmResourceRequest.from_parameters(slurm_params),
-            depends_on=[]
+            depends_on=[],
         )
 
 
 def test_slurm_resources_scavenge_with_no_job_time_fails(tmp_path):
-    
+
     workflow_params = Parameters.from_mapping(
         {
             "workflow_name": "Test",
@@ -278,14 +278,9 @@ def test_slurm_resources_scavenge_with_no_job_time_fails(tmp_path):
     multiply_params = Parameters.from_mapping(
         {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
     )
-    
+
     slurm_params = Parameters.from_mapping(
-        {
-            "partition": "scavenge",
-            "num_cpus": 1,
-            "num_gpus": 0,
-            "memory": "4G",
-        }
+        {"partition": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
 
     with pytest.raises(ValueError):
@@ -294,7 +289,7 @@ def test_slurm_resources_scavenge_with_no_job_time_fails(tmp_path):
             multiply_by_x_main,
             multiply_params,
             resource_request=SlurmResourceRequest.from_parameters(slurm_params),
-            depends_on=[]
+            depends_on=[],
         )
 
 
@@ -320,14 +315,14 @@ def test_slurm_resources_scavenge_with_valid_job_time_passes(tmp_path):
     multiply_params = Parameters.from_mapping(
         {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
     )
-    
+
     slurm_params = Parameters.from_mapping(
         {
             "partition": "scavenge",
             "num_cpus": 1,
             "num_gpus": 0,
             "memory": "4G",
-            "job_time_in_minutes": 60
+            "job_time_in_minutes": 60,
         }
     )
 
@@ -336,10 +331,11 @@ def test_slurm_resources_scavenge_with_valid_job_time_passes(tmp_path):
         multiply_by_x_main,
         multiply_params,
         resource_request=SlurmResourceRequest.from_parameters(slurm_params),
-        depends_on=[]
+        depends_on=[],
     )
 
     assert job
+
 
 def test_run_python_on_params_bad_resource_fails(tmp_path):
     workflow_params = Parameters.from_mapping(
@@ -368,10 +364,8 @@ def test_run_python_on_params_bad_resource_fails(tmp_path):
             multiply_job_name,
             multiply_by_x_main,
             multiply_params,
-            resource_request=SlurmResourceRequest(
-                job_time_in_minutes=1441
-            ),
-            depends_on=[]
+            resource_request=SlurmResourceRequest(job_time_in_minutes=1441),
+            depends_on=[],
         )
 
 
@@ -549,11 +543,18 @@ def test_dax_with_saga_categories(tmp_path):
 
     # Check that the multiply and sort jobs have the appropriate partition-defined categories set in
     # the DAX file
-    # print(Partition.from_str(multiply_partition))
-    assert _job_in_dax_has_category(dax_file, multiply_job_name, Partition.from_str(multiply_partition))
-    assert not _job_in_dax_has_category(dax_file, multiply_job_name, Partition.from_str(sort_partition))
-    assert _job_in_dax_has_category(dax_file, sort_job_name, Partition.from_str(sort_partition))
-    assert not _job_in_dax_has_category(dax_file, sort_job_name, multiply_partition)
+    assert _job_in_dax_has_category(
+        dax_file, multiply_job_name, Partition.from_str(multiply_partition)
+    )
+    assert not _job_in_dax_has_category(
+        dax_file, multiply_job_name, Partition.from_str(sort_partition)
+    )
+    assert _job_in_dax_has_category(
+        dax_file, sort_job_name, Partition.from_str(sort_partition)
+    )
+    assert not _job_in_dax_has_category(
+        dax_file, sort_job_name, Partition.from_str(multiply_partition)
+    )
 
 
 def test_category_max_jobs(tmp_path):
@@ -594,7 +595,13 @@ def test_category_max_jobs(tmp_path):
     )
 
     sort_slurm_params = Parameters.from_mapping(
-        {"partition": "ephemeral", "num_cpus": 1, "num_gpus": 0, "memory": "4G", "job_time_in_minutes": 120}
+        {
+            "partition": "ephemeral",
+            "num_cpus": 1,
+            "num_gpus": 0,
+            "memory": "4G",
+            "job_time_in_minutes": 120,
+        }
     )
     sort_resources = SlurmResourceRequest.from_parameters(sort_slurm_params)
 
