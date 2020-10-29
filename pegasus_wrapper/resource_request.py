@@ -4,6 +4,7 @@ from typing import Optional
 
 from attr import attrib, attrs
 from attr.validators import in_, instance_of, optional
+from attr.converters import default_if_none
 
 from vistautils.memory_amount import MemoryAmount
 from vistautils.parameters import Parameters
@@ -15,6 +16,30 @@ from typing_extensions import Protocol
 
 SCAVENGE = "scavenge"
 EPHEMERAL = "ephemeral"
+
+@attrs(frozen=True, slots=True)
+class Partition:
+    """
+    Representation of a SAGA partition
+    """
+
+    name: str = attrib(validator=instance_of(str))
+    walltime: int = attrib(validator=instance_of(int), kw_only=True)
+
+    def __eq__(self, other) -> bool:
+        return self.name == other.name
+
+    @staticmethod
+    def from_str(name: str):
+        _partition_to_walltime = {
+            "ephemeral": 720,
+            "scavenge": 60,
+        }
+
+        return Partition(
+            name=name,
+            walltime=_partition_to_walltime.get(name, _DEFAULT_JOB_TIME_IN_MINUTES)
+        )
 
 
 class ResourceRequest(Protocol):
@@ -74,8 +99,8 @@ class SlurmResourceRequest(ResourceRequest):
     memory: Optional[MemoryAmount] = attrib(
         validator=optional(instance_of(MemoryAmount)), kw_only=True, default=None
     )
-    partition: Optional[str] = attrib(
-        validator=optional(instance_of(str)), kw_only=True, default=None
+    partition: Optional[Partition] = attrib(
+        converter=lambda x: Partition.from_str(x) if x else None, kw_only=True, default=None
     )
     num_cpus: Optional[int] = attrib(
         validator=optional(in_(Range.at_least(1))), default=None, kw_only=True
@@ -85,6 +110,7 @@ class SlurmResourceRequest(ResourceRequest):
     )
     job_time_in_minutes: Optional[int] = attrib(
         validator=optional(instance_of(int)),
+        converter=default_if_none(_DEFAULT_JOB_TIME_IN_MINUTES),
         default=_DEFAULT_JOB_TIME_IN_MINUTES,
         kw_only=True,
     )
@@ -116,22 +142,21 @@ class SlurmResourceRequest(ResourceRequest):
 
     def unify(self, other: ResourceRequest) -> ResourceRequest:
         if isinstance(other, SlurmResourceRequest):
-            partition = other.partition if other.partition else self.partition
+            partition = other.partition or self.partition
         else:
             partition = self.partition
 
         return SlurmResourceRequest(
-            partition=partition,
-            memory=other.memory if other.memory else self.memory,
-            num_cpus=other.num_cpus if other.num_cpus else self.num_cpus,
-            num_gpus=other.num_gpus if other.num_gpus is not None else self.num_gpus,
+            partition=partition.name,
+            memory=other.memory or self.memory,
+            num_cpus=other.num_cpus or self.num_cpus,
+            num_gpus=other.num_gpus
+            if other.num_gpus is not None
+            else self.num_gpus,
             job_time_in_minutes=other.job_time_in_minutes
-            if other.job_time_in_minutes
-            else self.job_time_in_minutes,
-            exclude_list=other.exclude_list if other.exclude_list else self.exclude_list,
-            run_on_single_node=other.run_on_single_node
-            if other.run_on_single_node
-            else self.run_on_single_node,
+            or self.job_time_in_minutes,
+            exclude_list=other.exclude_list or self.exclude_list,
+            run_on_single_node=other.run_on_single_node or self.run_on_single_node,
         )
 
     def convert_time_to_slurm_format(self, job_time_in_minutes: int) -> str:
@@ -142,26 +167,26 @@ class SlurmResourceRequest(ResourceRequest):
         if not self.partition:
             raise RuntimeError("A partition to run on must be specified.")
 
+        if self.partition.walltime < self.job_time_in_minutes:
+            raise ValueError(f"{self.partition.name} has a walltime of {self.partition.walltime}, which is less than the job time given: {self.job_time_in_minutes}")
+
         qos_or_account = (
-            f"qos {self.partition}"
-            if self.partition in (SCAVENGE, EPHEMERAL)
-            else f"account {self.partition}"
+            f"qos {self.partition.name}"
+            if self.partition.name in (SCAVENGE, EPHEMERAL)
+            else f"account {self.partition.name}"
         )
         slurm_resource_content = SLURM_RESOURCE_STRING.format(
             qos_or_account=qos_or_account,
-            partition=self.partition,
-            num_cpus=self.num_cpus if self.num_cpus else 1,
+            partition=self.partition.name,
+            num_cpus=self.num_cpus or 1,
             num_gpus=self.num_gpus if self.num_gpus is not None else 0,
             job_name=job_name,
-            mem_str=to_slurm_memory_string(
-                self.memory if self.memory else _SLURM_DEFAULT_MEMORY
-            ),
+            mem_str=to_slurm_memory_string(self.memory or _SLURM_DEFAULT_MEMORY),
             time=self.convert_time_to_slurm_format(
-                self.job_time_in_minutes
-                if self.job_time_in_minutes
-                else _DEFAULT_JOB_TIME_IN_MINUTES
+                self.job_time_in_minutes or _DEFAULT_JOB_TIME_IN_MINUTES
             ),
         )
+
 
         if (
             self.exclude_list

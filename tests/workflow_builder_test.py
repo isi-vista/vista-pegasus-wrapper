@@ -14,6 +14,7 @@ from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.scripts.multiply_by_x import main as multiply_by_x_main
 from pegasus_wrapper.scripts.sort_nums_in_file import main as sort_nums_main
 from pegasus_wrapper.workflow import WorkflowBuilder
+from pegasus_wrapper.resource_request import Partition
 
 import pytest
 
@@ -27,7 +28,7 @@ def test_simple_dax(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
             "experiment_name": "fred",
         }
     )
@@ -65,12 +66,12 @@ def test_dax_with_job_on_saga(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
             "experiment_name": "fred",
         }
     )
     slurm_params = Parameters.from_mapping(
-        {"partition": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+        {"partition": "gaia", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
     multiply_input_file = tmp_path / "raw_nums.txt"
     random = Random()
@@ -158,11 +159,11 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
         }
     )
     slurm_params = Parameters.from_mapping(
-        {"partition": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+        {"partition": "gaia", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
     resources = SlurmResourceRequest.from_parameters(slurm_params)
     workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
@@ -212,6 +213,167 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
     # Make sure the Replica Catalog is not empty
     assert replica_catalog.stat().st_size > 0
 
+def test_slurm_resources_partition_with_invalid_job_time_fail(tmp_path):
+    
+    workflow_params = Parameters.from_mapping(
+        {
+            "workflow_name": "Test",
+            "workflow_created": "Testing",
+            "workflow_log_dir": str(tmp_path / "log"),
+            "workflow_directory": str(tmp_path / "working"),
+            "site": "saga",
+            "namespace": "test",
+            "partition": "gaia",
+        }
+    )
+
+    wb = WorkflowBuilder.from_parameters(workflow_params)
+
+    multiply_job_name = Locator(_parse_parts("jobs/multiply"))
+    multiply_output_file = tmp_path / "multiplied_nums.txt"
+    multiply_input_file = tmp_path / "raw_nums.txt"
+    multiply_params = Parameters.from_mapping(
+        {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
+    )
+    
+    slurm_params = Parameters.from_mapping(
+        {
+            "partition": "scavenge",
+            "num_cpus": 1,
+            "num_gpus": 0,
+            "memory": "4G",
+            "job_time_in_minutes": 61
+        }
+    )
+
+    with pytest.raises(ValueError):
+        wb.run_python_on_parameters(
+            multiply_job_name,
+            multiply_by_x_main,
+            multiply_params,
+            resource_request=SlurmResourceRequest.from_parameters(slurm_params),
+            depends_on=[]
+        )
+
+
+def test_slurm_resources_scavenge_with_no_job_time_fails(tmp_path):
+    
+    workflow_params = Parameters.from_mapping(
+        {
+            "workflow_name": "Test",
+            "workflow_created": "Testing",
+            "workflow_log_dir": str(tmp_path / "log"),
+            "workflow_directory": str(tmp_path / "working"),
+            "site": "saga",
+            "namespace": "test",
+            "partition": "gaia",
+        }
+    )
+
+    wb = WorkflowBuilder.from_parameters(workflow_params)
+
+    multiply_job_name = Locator(_parse_parts("jobs/multiply"))
+    multiply_output_file = tmp_path / "multiplied_nums.txt"
+    multiply_input_file = tmp_path / "raw_nums.txt"
+    multiply_params = Parameters.from_mapping(
+        {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
+    )
+    
+    slurm_params = Parameters.from_mapping(
+        {
+            "partition": "scavenge",
+            "num_cpus": 1,
+            "num_gpus": 0,
+            "memory": "4G",
+        }
+    )
+
+    with pytest.raises(ValueError):
+        wb.run_python_on_parameters(
+            multiply_job_name,
+            multiply_by_x_main,
+            multiply_params,
+            resource_request=SlurmResourceRequest.from_parameters(slurm_params),
+            depends_on=[]
+        )
+
+
+def test_slurm_resources_scavenge_with_valid_job_time_passes(tmp_path):
+
+    workflow_params = Parameters.from_mapping(
+        {
+            "workflow_name": "Test",
+            "workflow_created": "Testing",
+            "workflow_log_dir": str(tmp_path / "log"),
+            "workflow_directory": str(tmp_path / "working"),
+            "site": "saga",
+            "namespace": "test",
+            "partition": "gaia",
+        }
+    )
+
+    wb = WorkflowBuilder.from_parameters(workflow_params)
+
+    multiply_job_name = Locator(_parse_parts("jobs/multiply"))
+    multiply_output_file = tmp_path / "multiplied_nums.txt"
+    multiply_input_file = tmp_path / "raw_nums.txt"
+    multiply_params = Parameters.from_mapping(
+        {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
+    )
+    
+    slurm_params = Parameters.from_mapping(
+        {
+            "partition": "scavenge",
+            "num_cpus": 1,
+            "num_gpus": 0,
+            "memory": "4G",
+            "job_time_in_minutes": 60
+        }
+    )
+
+    job = wb.run_python_on_parameters(
+        multiply_job_name,
+        multiply_by_x_main,
+        multiply_params,
+        resource_request=SlurmResourceRequest.from_parameters(slurm_params),
+        depends_on=[]
+    )
+
+    assert job
+
+def test_run_python_on_params_bad_resource_fails(tmp_path):
+    workflow_params = Parameters.from_mapping(
+        {
+            "workflow_name": "Test",
+            "workflow_created": "Testing",
+            "workflow_log_dir": str(tmp_path / "log"),
+            "workflow_directory": str(tmp_path / "working"),
+            "site": "saga",
+            "namespace": "test",
+            "partition": "gaia",
+        }
+    )
+
+    wb = WorkflowBuilder.from_parameters(workflow_params)
+
+    multiply_job_name = Locator(_parse_parts("jobs/multiply"))
+    multiply_output_file = tmp_path / "multiplied_nums.txt"
+    multiply_input_file = tmp_path / "raw_nums.txt"
+    multiply_params = Parameters.from_mapping(
+        {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
+    )
+
+    with pytest.raises(ValueError):
+        wb.run_python_on_parameters(
+            multiply_job_name,
+            multiply_by_x_main,
+            multiply_params,
+            resource_request=SlurmResourceRequest(
+                job_time_in_minutes=1441
+            ),
+            depends_on=[]
+        )
+
 
 class _JobWithNameHasCategoryHandler(saxhandler.ContentHandler):
     """
@@ -258,7 +420,8 @@ class _JobWithNameHasCategoryHandler(saxhandler.ContentHandler):
         # the expected category.
         elif name == "profile" and self._in_target_job_category:
             category = "".join(self._job_category_content).strip()
-            if category == self.category:
+            # category will always be a string, need to convert any object or non-str to compare
+            if category == str(self.category):
                 self._job_has_category = True
             self._job_category_content = []
             self._in_target_job_category = False
@@ -293,7 +456,7 @@ def test_dax_with_categories(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
         }
     )
     workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
@@ -333,10 +496,10 @@ def test_dax_with_saga_categories(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
         }
     )
-    multiply_partition = "scavenge"
+    multiply_partition = "gaia"
     multiply_slurm_params = Parameters.from_mapping(
         {"partition": multiply_partition, "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
@@ -362,7 +525,7 @@ def test_dax_with_saga_categories(tmp_path):
         locator=Locator("multiply"),
     )
 
-    sort_partition = "ephemeral"
+    sort_partition = "lestat"
     sort_slurm_params = Parameters.from_mapping(
         {"partition": sort_partition, "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
@@ -386,9 +549,10 @@ def test_dax_with_saga_categories(tmp_path):
 
     # Check that the multiply and sort jobs have the appropriate partition-defined categories set in
     # the DAX file
-    assert _job_in_dax_has_category(dax_file, multiply_job_name, multiply_partition)
-    assert not _job_in_dax_has_category(dax_file, multiply_job_name, sort_partition)
-    assert _job_in_dax_has_category(dax_file, sort_job_name, sort_partition)
+    # print(Partition.from_str(multiply_partition))
+    assert _job_in_dax_has_category(dax_file, multiply_job_name, Partition.from_str(multiply_partition))
+    assert not _job_in_dax_has_category(dax_file, multiply_job_name, Partition.from_str(sort_partition))
+    assert _job_in_dax_has_category(dax_file, sort_job_name, Partition.from_str(sort_partition))
     assert not _job_in_dax_has_category(dax_file, sort_job_name, multiply_partition)
 
 
@@ -401,11 +565,11 @@ def test_category_max_jobs(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
         }
     )
     multiply_slurm_params = Parameters.from_mapping(
-        {"partition": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+        {"partition": "gaia", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
     multiply_resources = SlurmResourceRequest.from_parameters(multiply_slurm_params)
     workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
@@ -430,7 +594,7 @@ def test_category_max_jobs(tmp_path):
     )
 
     sort_slurm_params = Parameters.from_mapping(
-        {"partition": "ephemeral", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+        {"partition": "ephemeral", "num_cpus": 1, "num_gpus": 0, "memory": "4G", "job_time_in_minutes": 120}
     )
     sort_resources = SlurmResourceRequest.from_parameters(sort_slurm_params)
 
@@ -447,7 +611,7 @@ def test_category_max_jobs(tmp_path):
         resource_request=sort_resources,
     )
 
-    workflow_builder.limit_jobs_for_category("scavenge", 1)
+    workflow_builder.limit_jobs_for_category("gaia", 1)
     workflow_builder.write_dax_to_dir()
 
     config = workflow_params.existing_directory("workflow_directory") / "pegasus.conf"
@@ -456,7 +620,7 @@ def test_category_max_jobs(tmp_path):
     # Make sure the config contains the appropriate maxjobs lines and no inappropriate maxjobs lines
     with config.open("r") as f:
         lines = f.readlines()
-    assert any(["dagman.scavenge.maxjobs=1" in line for line in lines])
+    assert any(["dagman.gaia.maxjobs=1" in line for line in lines])
     assert not any(["dagman.ephemeral.maxjobs=" in line for line in lines])
 
 
@@ -473,12 +637,12 @@ def test_dax_test_exclude_nodes_on_saga(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
             "exclude_list": sample_exclude,
         }
     )
     slurm_params = Parameters.from_mapping(
-        {"partition": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+        {"partition": "gaia", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
     multiply_input_file = tmp_path / "raw_nums.txt"
     random = Random()
