@@ -245,6 +245,17 @@ class WorkflowBuilder:
             for category, max_jobs in self._category_to_max_jobs.items()
         )
 
+    def _nuke_checkpoints_and_clear_rc(self, output_xml_dir: Path) -> None:
+        subprocess.run(
+            ["python", nuke_checkpoints.__file__, output_xml_dir],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+        )
+        self._replica_catalog.open(
+            "w"
+        ).close()  # open with `w` followed by close empties it
+
     def write_dax_to_dir(self, output_xml_dir: Optional[Path] = None) -> Path:
         if not output_xml_dir:
             output_xml_dir = self._workflow_directory
@@ -253,15 +264,11 @@ class WorkflowBuilder:
         num_ckpts = len([ckpt_file for ckpt_file in output_xml_dir.rglob("___ckpt")])
         if num_jobs == num_ckpts:
             nuke = input(
-                "DAX *may* create a NOOP workflow. Do you want to nuke the checkpoints? [y/n]"
+                "DAX *may* create a NOOP workflow. Do you want to nuke the checkpoints and regenerate? [y/n]"
             )
             if nuke == "y":
-                subprocess.run(
-                    ["python", nuke_checkpoints.__file__, output_xml_dir],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    encoding="utf-8",
-                )
+                self._nuke_checkpoints_and_clear_rc(output_xml_dir)
+                logging.info("Checkpoints cleared!")
 
         dax_file_name = f"{self.name}.dax"
         dax_file = output_xml_dir / dax_file_name

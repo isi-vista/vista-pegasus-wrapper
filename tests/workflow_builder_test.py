@@ -213,6 +213,80 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
     assert replica_catalog.stat().st_size > 0
 
 
+def test_clearing_ckpts(monkeypatch, tmp_path):
+
+    workflow_params = Parameters.from_mapping(
+        {
+            "workflow_name": "Test",
+            "workflow_created": "Testing",
+            "workflow_log_dir": str(tmp_path / "log"),
+            "workflow_directory": str(tmp_path / "working"),
+            "site": "saga",
+            "namespace": "test",
+            "partition": "scavenge",
+        }
+    )
+
+    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+
+    multiply_job_name = Locator(_parse_parts("jobs/multiply"))
+    multiply_output_file = tmp_path / "multiplied_nums.txt"
+    multiply_input_file = tmp_path / "raw_nums.txt"
+    multiply_params = Parameters.from_mapping(
+        {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
+    )
+
+    multiple_dir = workflow_builder.directory_for(multiply_job_name)
+
+    checkpointed_multiply_file = multiple_dir / "___ckpt"
+    checkpointed_multiply_file.touch()
+    multiply_output_file.touch()
+
+    workflow_builder.run_python_on_parameters(
+        multiply_job_name, multiply_by_x_main, multiply_params, depends_on=[]
+    )
+    monkeypatch.setattr("builtins.input", lambda _: "y")
+    workflow_builder.write_dax_to_dir()
+    assert not checkpointed_multiply_file.exists()
+
+
+def test_not_clearing_ckpts(monkeypatch, tmp_path):
+
+    workflow_params = Parameters.from_mapping(
+        {
+            "workflow_name": "Test",
+            "workflow_created": "Testing",
+            "workflow_log_dir": str(tmp_path / "log"),
+            "workflow_directory": str(tmp_path / "working"),
+            "site": "saga",
+            "namespace": "test",
+            "partition": "scavenge",
+        }
+    )
+
+    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+
+    multiply_job_name = Locator(_parse_parts("jobs/multiply"))
+    multiply_output_file = tmp_path / "multiplied_nums.txt"
+    multiply_input_file = tmp_path / "raw_nums.txt"
+    multiply_params = Parameters.from_mapping(
+        {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
+    )
+
+    multiple_dir = workflow_builder.directory_for(multiply_job_name)
+
+    checkpointed_multiply_file = multiple_dir / "___ckpt"
+    checkpointed_multiply_file.touch()
+    multiply_output_file.touch()
+
+    workflow_builder.run_python_on_parameters(
+        multiply_job_name, multiply_by_x_main, multiply_params, depends_on=[]
+    )
+    monkeypatch.setattr("builtins.input", lambda _: "n")
+    workflow_builder.write_dax_to_dir()
+    assert checkpointed_multiply_file.exists()
+
+
 class _JobWithNameHasCategoryHandler(saxhandler.ContentHandler):
     """
     SAX handler which checks whether a DAX file
