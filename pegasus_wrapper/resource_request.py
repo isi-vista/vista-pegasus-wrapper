@@ -30,6 +30,9 @@ class Partition:
     def __eq__(self, other) -> bool:
         return self.name == other.name
 
+    def __str__(self) -> str:
+        return self.name
+
     @staticmethod
     def from_str(name: str):
         _partition_to_walltime = {"ephemeral": 720, "scavenge": 60}

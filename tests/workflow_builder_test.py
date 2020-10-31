@@ -10,7 +10,7 @@ from vistautils.parameters import Parameters
 from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator, _parse_parts
 from pegasus_wrapper.pegasus_utils import build_submit_script
-from pegasus_wrapper.resource_request import Partition, SlurmResourceRequest
+from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.scripts.multiply_by_x import main as multiply_by_x_main
 from pegasus_wrapper.scripts.sort_nums_in_file import main as sort_nums_main
 from pegasus_wrapper.workflow import WorkflowBuilder
@@ -543,18 +543,10 @@ def test_dax_with_saga_categories(tmp_path):
 
     # Check that the multiply and sort jobs have the appropriate partition-defined categories set in
     # the DAX file
-    assert _job_in_dax_has_category(
-        dax_file, multiply_job_name, Partition.from_str(multiply_partition)
-    )
-    assert not _job_in_dax_has_category(
-        dax_file, multiply_job_name, Partition.from_str(sort_partition)
-    )
-    assert _job_in_dax_has_category(
-        dax_file, sort_job_name, Partition.from_str(sort_partition)
-    )
-    assert not _job_in_dax_has_category(
-        dax_file, sort_job_name, Partition.from_str(multiply_partition)
-    )
+    assert _job_in_dax_has_category(dax_file, multiply_job_name, multiply_partition)
+    assert not _job_in_dax_has_category(dax_file, multiply_job_name, sort_partition)
+    assert _job_in_dax_has_category(dax_file, sort_job_name, sort_partition)
+    assert not _job_in_dax_has_category(dax_file, sort_job_name, multiply_partition)
 
 
 def test_category_max_jobs(tmp_path):
