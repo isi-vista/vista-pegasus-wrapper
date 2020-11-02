@@ -39,7 +39,9 @@ class Partition:
 
         return Partition(
             name=name,
-            max_walltime=_partition_to_max_walltime.get(name, _DEFAULT_JOB_TIME_IN_MINUTES),
+            max_walltime=_partition_to_max_walltime.get(
+                name, _DEFAULT_JOB_TIME_IN_MINUTES
+            ),
         )
 
 
