@@ -25,7 +25,7 @@ class Partition:
     """
 
     name: str = attrib(validator=instance_of(str))
-    walltime: int = attrib(validator=instance_of(int), kw_only=True)
+    max_walltime: int = attrib(validator=instance_of(int), kw_only=True)
 
     def __eq__(self, other) -> bool:
         return self.name == other.name
@@ -35,11 +35,11 @@ class Partition:
 
     @staticmethod
     def from_str(name: str):
-        _partition_to_walltime = {"ephemeral": 720, "scavenge": 60}
+        _partition_to_max_walltime = {"ephemeral": 720, "scavenge": 60}
 
         return Partition(
             name=name,
-            walltime=_partition_to_walltime.get(name, _DEFAULT_JOB_TIME_IN_MINUTES),
+            max_walltime=_partition_to_max_walltime.get(name, _DEFAULT_JOB_TIME_IN_MINUTES),
         )
 
 
@@ -111,8 +111,8 @@ class SlurmResourceRequest(ResourceRequest):
     num_gpus: Optional[int] = attrib(
         validator=optional(in_(Range.at_least(0))), default=None, kw_only=True
     )
-    job_time_in_minutes: Optional[int] = attrib(
-        validator=optional(instance_of(int)),
+    job_time_in_minutes: int = attrib(
+        validator=instance_of(int),
         converter=default_if_none(_DEFAULT_JOB_TIME_IN_MINUTES),
         default=_DEFAULT_JOB_TIME_IN_MINUTES,
         kw_only=True,
@@ -167,9 +167,9 @@ class SlurmResourceRequest(ResourceRequest):
         if not self.partition:
             raise RuntimeError("A partition to run on must be specified.")
 
-        if self.partition.walltime < self.job_time_in_minutes:
+        if self.partition.max_walltime < self.job_time_in_minutes:
             raise ValueError(
-                f"{self.partition.name} has a walltime of {self.partition.walltime} mins, which is less than the time given ({self.job_time_in_minutes} mins) for job: {job_name}."
+                f"{self.partition.name} has a max walltime of {self.partition.max_walltime} mins, which is less than the time given ({self.job_time_in_minutes} mins) for job: {job_name}."
             )
 
         qos_or_account = (

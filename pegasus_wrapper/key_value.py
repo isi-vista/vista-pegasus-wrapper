@@ -79,10 +79,7 @@ class _ComposedKeyValueTransform(KeyValueTransform):
         final_transform = self.transforms[-1]
         cur_value = input_zip
         for transform in self.transforms:
-            if transform is final_transform:
-                step_output_locator = output_locator
-            else:
-                step_output_locator = None
+            step_output_locator = output_locator if transform is final_transform else None
             cur_value = transform(cur_value, output_locator=step_output_locator)
         return cur_value
 
