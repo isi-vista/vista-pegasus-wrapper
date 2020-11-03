@@ -27,7 +27,7 @@ def test_simple_dax(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
             "experiment_name": "fred",
         }
     )
@@ -65,12 +65,12 @@ def test_dax_with_job_on_saga(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
             "experiment_name": "fred",
         }
     )
     slurm_params = Parameters.from_mapping(
-        {"partition": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+        {"partition": "gaia", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
     multiply_input_file = tmp_path / "raw_nums.txt"
     random = Random()
@@ -158,11 +158,11 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
         }
     )
     slurm_params = Parameters.from_mapping(
-        {"partition": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+        {"partition": "gaia", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
     resources = SlurmResourceRequest.from_parameters(slurm_params)
     workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
@@ -332,7 +332,8 @@ class _JobWithNameHasCategoryHandler(saxhandler.ContentHandler):
         # the expected category.
         elif name == "profile" and self._in_target_job_category:
             category = "".join(self._job_category_content).strip()
-            if category == self.category:
+            # category will always be a string, need to convert any object or non-str to compare
+            if category == str(self.category):
                 self._job_has_category = True
             self._job_category_content = []
             self._in_target_job_category = False
@@ -367,7 +368,7 @@ def test_dax_with_categories(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
         }
     )
     workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
@@ -407,10 +408,10 @@ def test_dax_with_saga_categories(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
         }
     )
-    multiply_partition = "scavenge"
+    multiply_partition = "gaia"
     multiply_slurm_params = Parameters.from_mapping(
         {"partition": multiply_partition, "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
@@ -436,7 +437,7 @@ def test_dax_with_saga_categories(tmp_path):
         locator=Locator("multiply"),
     )
 
-    sort_partition = "ephemeral"
+    sort_partition = "lestat"
     sort_slurm_params = Parameters.from_mapping(
         {"partition": sort_partition, "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
@@ -475,11 +476,11 @@ def test_category_max_jobs(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
         }
     )
     multiply_slurm_params = Parameters.from_mapping(
-        {"partition": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+        {"partition": "gaia", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
     multiply_resources = SlurmResourceRequest.from_parameters(multiply_slurm_params)
     workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
@@ -504,7 +505,13 @@ def test_category_max_jobs(tmp_path):
     )
 
     sort_slurm_params = Parameters.from_mapping(
-        {"partition": "ephemeral", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+        {
+            "partition": "ephemeral",
+            "num_cpus": 1,
+            "num_gpus": 0,
+            "memory": "4G",
+            "job_time_in_minutes": 120,
+        }
     )
     sort_resources = SlurmResourceRequest.from_parameters(sort_slurm_params)
 
@@ -521,7 +528,7 @@ def test_category_max_jobs(tmp_path):
         resource_request=sort_resources,
     )
 
-    workflow_builder.limit_jobs_for_category("scavenge", 1)
+    workflow_builder.limit_jobs_for_category("gaia", 1)
     workflow_builder.write_dax_to_dir()
 
     config = workflow_params.existing_directory("workflow_directory") / "pegasus.conf"
@@ -530,8 +537,8 @@ def test_category_max_jobs(tmp_path):
     # Make sure the config contains the appropriate maxjobs lines and no inappropriate maxjobs lines
     with config.open("r") as f:
         lines = f.readlines()
-    assert any(["dagman.scavenge.maxjobs=1" in line for line in lines])
-    assert not any(["dagman.ephemeral.maxjobs=" in line for line in lines])
+    assert any("dagman.gaia.maxjobs=1" in line for line in lines)
+    assert all("dagman.ephemeral.maxjobs=" not in line for line in lines)
 
 
 def test_dax_test_exclude_nodes_on_saga(tmp_path):
@@ -547,12 +554,12 @@ def test_dax_test_exclude_nodes_on_saga(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
             "exclude_list": sample_exclude,
         }
     )
     slurm_params = Parameters.from_mapping(
-        {"partition": "scavenge", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+        {"partition": "gaia", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
     multiply_input_file = tmp_path / "raw_nums.txt"
     random = Random()

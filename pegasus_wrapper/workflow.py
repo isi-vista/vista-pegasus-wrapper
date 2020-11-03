@@ -192,10 +192,7 @@ class WorkflowBuilder:
             for out_file in parent_dependency.output_files:
                 job.uses(out_file, link=Link.INPUT)
 
-        if resource_request is not None:
-            resource_request = self.default_resource_request.unify(resource_request)
-        else:
-            resource_request = self.default_resource_request
+        resource_request = self.set_resource_request(resource_request)
 
         if category:
             job.profile(Namespace.DAGMAN, "category", category)
@@ -229,6 +226,14 @@ class WorkflowBuilder:
 
         logging.info("Scheduled Python job %s", job_name)
         return dependency_node
+
+    def set_resource_request(self, resource_request: ResourceRequest):
+        if resource_request is not None:
+            resource_request = self.default_resource_request.unify(resource_request)
+        else:
+            resource_request = self.default_resource_request
+
+        return resource_request
 
     def limit_jobs_for_category(self, category: str, max_jobs: int):
         """

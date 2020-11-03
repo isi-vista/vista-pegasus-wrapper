@@ -27,7 +27,7 @@ def test_composed_key_value_transform(tmp_path):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
-            "partition": "scavenge",
+            "partition": "gaia",
         }
     )
 
