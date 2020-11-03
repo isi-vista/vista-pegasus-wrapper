@@ -16,6 +16,8 @@ from typing_extensions import Protocol
 
 SCAVENGE = "scavenge"
 EPHEMERAL = "ephemeral"
+_SLURM_DEFAULT_MEMORY = MemoryAmount.parse("2G")
+_DEFAULT_JOB_TIME_IN_MINUTES = 1440
 
 
 @attrs(frozen=True, slots=True)
@@ -87,10 +89,6 @@ class ResourceRequest(Protocol):
             return SlurmResourceRequest.from_parameters(params)
         else:
             raise RuntimeError(f"Invalid backend option {backend}")
-
-
-_SLURM_DEFAULT_MEMORY = MemoryAmount.parse("2G")
-_DEFAULT_JOB_TIME_IN_MINUTES = 1440
 
 
 @attrs(frozen=True, slots=True)

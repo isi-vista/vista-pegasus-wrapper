@@ -25,7 +25,11 @@ from pegasus_wrapper.pegasus_utils import (
     path_to_pegasus_file,
     path_to_pfn,
 )
-from pegasus_wrapper.resource_request import ResourceRequest
+from pegasus_wrapper.resource_request import (
+    Partition,
+    ResourceRequest,
+    SlurmResourceRequest,
+)
 from pegasus_wrapper.scripts import nuke_checkpoints
 
 from Pegasus.DAX3 import ADAG, Executable, File, Job, Link, Namespace
@@ -192,10 +196,7 @@ class WorkflowBuilder:
             for out_file in parent_dependency.output_files:
                 job.uses(out_file, link=Link.INPUT)
 
-        if resource_request is not None:
-            resource_request = self.default_resource_request.unify(resource_request)
-        else:
-            resource_request = self.default_resource_request
+        resource_request = self.set_resource_request(parameters, resource_request)
 
         if category:
             job.profile(Namespace.DAGMAN, "category", category)
@@ -229,6 +230,22 @@ class WorkflowBuilder:
 
         logging.info("Scheduled Python job %s", job_name)
         return dependency_node
+
+    def set_resource_request(
+        self, parameters: Parameters, resource_request: ResourceRequest
+    ):
+        if resource_request is not None:
+            resource_request = self.default_resource_request.unify(resource_request)
+        else:
+            resource_request = self.default_resource_request
+
+        if isinstance(resource_request, SlurmResourceRequest) and parameters.boolean(
+            "default_unspecified_job_times_to_partition_max_walltime", False
+        ):
+            resource_request.job_time_in_minutes = Partition(
+                resource_request.partition
+            ).max_walltime
+        return resource_request
 
     def limit_jobs_for_category(self, category: str, max_jobs: int):
         """
