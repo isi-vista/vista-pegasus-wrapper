@@ -124,12 +124,12 @@ class SlurmResourceRequest(ResourceRequest):
         if not self.job_time_in_minutes:
             partition_job_time = None
             if not self.partition:
-                logging.info(
+                logging.warning(
                     "Could not find selected partition. Setting job with no job time specified to max project partition walltime."
                 )
                 partition_job_time = _PROJECT_PARTITION_JOB_TIME_IN_MINUTES
             else:
-                logging.info(
+                logging.warning(
                     "Defaulting job with no job time specified to max walltime of selected partition '%s'",
                     self.partition.name,
                 )
