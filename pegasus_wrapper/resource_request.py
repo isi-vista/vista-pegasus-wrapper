@@ -3,7 +3,6 @@ from abc import abstractmethod
 from typing import Optional
 
 from attr import attrib, attrs
-from attr.converters import default_if_none
 from attr.validators import in_, instance_of, optional
 
 from vistautils.memory_amount import MemoryAmount
@@ -17,7 +16,7 @@ from typing_extensions import Protocol
 SCAVENGE = "scavenge"
 EPHEMERAL = "ephemeral"
 _SLURM_DEFAULT_MEMORY = MemoryAmount.parse("2G")
-_DEFAULT_JOB_TIME_IN_MINUTES = 1440
+_PROJECT_PARTITION_JOB_TIME_IN_MINUTES = 1440
 
 
 @attrs(frozen=True, slots=True)
@@ -42,7 +41,7 @@ class Partition:
         return Partition(
             name=name,
             max_walltime=_partition_to_max_walltime.get(
-                name, _DEFAULT_JOB_TIME_IN_MINUTES
+                name, _PROJECT_PARTITION_JOB_TIME_IN_MINUTES
             ),
         )
 
@@ -97,13 +96,13 @@ class SlurmResourceRequest(ResourceRequest):
     A `ResourceRequest` for a job running on a SLURM cluster.
     """
 
-    memory: Optional[MemoryAmount] = attrib(
-        validator=optional(instance_of(MemoryAmount)), kw_only=True, default=None
-    )
     partition: Optional[Partition] = attrib(
         converter=lambda x: Partition.from_str(x) if x else None,
         kw_only=True,
         default=None,
+    )
+    memory: Optional[MemoryAmount] = attrib(
+        validator=optional(instance_of(MemoryAmount)), kw_only=True, default=None
     )
     num_cpus: Optional[int] = attrib(
         validator=optional(in_(Range.at_least(1))), default=None, kw_only=True
@@ -111,11 +110,8 @@ class SlurmResourceRequest(ResourceRequest):
     num_gpus: Optional[int] = attrib(
         validator=optional(in_(Range.at_least(0))), default=None, kw_only=True
     )
-    job_time_in_minutes: int = attrib(
-        validator=instance_of(int),
-        converter=default_if_none(_DEFAULT_JOB_TIME_IN_MINUTES),
-        default=_DEFAULT_JOB_TIME_IN_MINUTES,
-        kw_only=True,
+    job_time_in_minutes: Optional[int] = attrib(
+        validator=optional(instance_of(int)), default=None, kw_only=True
     )
     exclude_list: Optional[str] = attrib(
         validator=optional(instance_of(str)), kw_only=True, default=None
@@ -123,6 +119,24 @@ class SlurmResourceRequest(ResourceRequest):
     run_on_single_node: Optional[str] = attrib(
         validator=optional(instance_of(str)), kw_only=True, default=None
     )
+
+    def __attrs_post_init__(self):
+        if not self.job_time_in_minutes:
+            partition_job_time = None
+            if not self.partition:
+                logging.info(
+                    "Could not find selected partition. Setting job with no job time specified to max project partition walltime."
+                )
+                partition_job_time = _PROJECT_PARTITION_JOB_TIME_IN_MINUTES
+            else:
+                logging.info(
+                    "Defaulting job with no job time specified to max walltime of selected partition '%s'",
+                    self.partition.name,
+                )
+                partition_job_time = self.partition.max_walltime
+            # Workaround suggested by maintainers of attrs.
+            # See https://www.attrs.org/en/stable/how-does-it-work.html#how-frozen
+            object.__setattr__(self, "job_time_in_minutes", partition_job_time)
 
     @run_on_single_node.validator
     def check(self, _, value: str):
@@ -169,7 +183,7 @@ class SlurmResourceRequest(ResourceRequest):
 
         if self.partition.max_walltime < self.job_time_in_minutes:
             raise ValueError(
-                f"{self.partition.name} has a max walltime of {self.partition.max_walltime} mins, which is less than the time given ({self.job_time_in_minutes} mins) for job: {job_name}."
+                f"Partition '{self.partition.name}' has a max walltime of {self.partition.max_walltime} mins, which is less than the time given ({self.job_time_in_minutes} mins) for job: {job_name}."
             )
 
         qos_or_account = (
@@ -184,9 +198,7 @@ class SlurmResourceRequest(ResourceRequest):
             num_gpus=self.num_gpus if self.num_gpus is not None else 0,
             job_name=job_name,
             mem_str=to_slurm_memory_string(self.memory or _SLURM_DEFAULT_MEMORY),
-            time=self.convert_time_to_slurm_format(
-                self.job_time_in_minutes or _DEFAULT_JOB_TIME_IN_MINUTES
-            ),
+            time=self.convert_time_to_slurm_format(self.job_time_in_minutes),
         )
 
         if (
