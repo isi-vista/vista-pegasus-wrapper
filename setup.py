@@ -23,7 +23,7 @@ setup(
     python_requires="~=3.6",
     install_requires=[
         "importlib-resources==1.4.0",
-	"vistautils>=0.21.0"
+	    "vistautils>=0.21.0",
     ],
     classifiers=[
         "Programming Language :: Python :: 3",

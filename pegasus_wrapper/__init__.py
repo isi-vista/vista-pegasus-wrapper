@@ -61,6 +61,7 @@ def run_python_on_parameters(
     resource_request: Optional[ResourceRequest] = None,
     override_conda_config: Optional[CondaConfiguration] = None,
     category: Optional[str] = None,
+    use_pypy: bool = False,
 ) -> DependencyNode:
     """
     Schedule a job to run the given *python_module* on the given *parameters*.
@@ -80,6 +81,7 @@ def run_python_on_parameters(
         resource_request=resource_request,
         override_conda_config=override_conda_config,
         category=category,
+        use_pypy=use_pypy,
     )
 
 
