@@ -95,6 +95,7 @@ class CondaJobScriptGenerator:
         stdout_file: Path,
         ckpt_path: Optional[Path] = None,
         override_conda_config: Optional[CondaConfiguration] = None,
+        python: str = "python",
     ) -> str:
         """
         Returns the content of a shell script to run the given Python entry point
@@ -118,6 +119,7 @@ class CondaJobScriptGenerator:
             param_file=param_file,
             ckpt_line=f"touch {ckpt_path.absolute()}" if ckpt_path else "",
             stdout_file=stdout_file,
+            python=python,
         )
 
     def write_shell_script_to(
@@ -131,6 +133,7 @@ class CondaJobScriptGenerator:
         stdout_file: Optional[Path] = None,
         ckpt_path: Optional[Path] = None,
         override_conda_config: Optional[CondaConfiguration] = None,
+        python: str = "python",
     ) -> None:
         if isinstance(parameters, Path):
             if params_path:
@@ -161,6 +164,7 @@ class CondaJobScriptGenerator:
                 working_directory=working_directory,
                 ckpt_path=ckpt_path,
                 override_conda_config=override_conda_config,
+                python=python,
             ),
             encoding="utf-8",
         )
@@ -185,8 +189,8 @@ fi
 {spack_lines}
 cd {working_directory}
 echo `which python`
-echo python -m {entry_point} {param_file}
-python -m {entry_point} {param_file} 2>&1 | tee {stdout_file}
+echo {python} -m {entry_point} {param_file}
+{python} -m {entry_point} {param_file} 2>&1 | tee {stdout_file}
 {ckpt_line}
 """
 

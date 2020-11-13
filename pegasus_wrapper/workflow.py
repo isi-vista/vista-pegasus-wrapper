@@ -127,6 +127,7 @@ class WorkflowBuilder:
         resource_request: Optional[ResourceRequest] = None,
         override_conda_config: Optional[CondaConfiguration] = None,
         category: Optional[str] = None,
+        use_pypy: bool = False,
     ) -> DependencyNode:
         """
         Schedule a job to run the given *python_module* on the given *parameters*.
@@ -173,6 +174,7 @@ class WorkflowBuilder:
             stdout_file=stdout_path,
             ckpt_path=checkpoint_path,
             override_conda_config=override_conda_config,
+            python="pypy3" if use_pypy else "python",
         )
         script_executable = Executable(
             namespace=self._namespace,
