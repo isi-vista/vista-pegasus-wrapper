@@ -97,9 +97,7 @@ class AbstractArtifact(Artifact):
         converter=_canonicalize_depends_on, kw_only=True, default=immutableset()
     )
     locator: Optional[Locator] = attrib(
-        validator=optional(instance_of(Locator)),
-        kw_only=True,
-        default=None
+        validator=optional(instance_of(Locator)), kw_only=True, default=None
     )
 
 
