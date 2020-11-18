@@ -62,7 +62,7 @@ class Artifact(Protocol):
     """
 
     depends_on: ImmutableSet[DependencyNode]
-    locator: Optional[Locator]
+    locator: Optional[Locator] = attrib(validator=optional(instance_of(Locator)))
 
 
 def _canonicalize_depends_on(
@@ -97,7 +97,9 @@ class AbstractArtifact(Artifact):
         converter=_canonicalize_depends_on, kw_only=True, default=immutableset()
     )
     locator: Optional[Locator] = attrib(
-        validator=optional(instance_of(Locator)), kw_only=True
+        validator=optional(instance_of(Locator)),
+        kw_only=True,
+        default=None
     )
 
 

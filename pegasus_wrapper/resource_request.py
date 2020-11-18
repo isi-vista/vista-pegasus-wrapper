@@ -36,7 +36,7 @@ class Partition:
 
     @staticmethod
     def from_str(name: str):
-        _partition_to_max_walltime = {"ephemeral": 720, "scavenge": 60}
+        _partition_to_max_walltime = {"ephemeral": 720, "scavenge": 120}
 
         return Partition(
             name=name,
