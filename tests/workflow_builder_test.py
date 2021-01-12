@@ -29,6 +29,7 @@ def test_simple_dax(tmp_path):
             "namespace": "test",
             "partition": "gaia",
             "experiment_name": "fred",
+            "home_dir": str(tmp_path),
         }
     )
     workflow_builder = WorkflowBuilder.from_parameters(params)
@@ -67,6 +68,7 @@ def test_dax_with_job_on_saga(tmp_path):
             "namespace": "test",
             "partition": "gaia",
             "experiment_name": "fred",
+            "home_dir": str(tmp_path),
         }
     )
     slurm_params = Parameters.from_mapping(
@@ -137,6 +139,24 @@ def test_dax_with_job_on_saga(tmp_path):
     assert submit_script_one.exists()
     assert submit_script_two.exists()
 
+    site_catalog = workflow_params.existing_directory("workflow_directory") / "sites.yml"
+    assert site_catalog.exists()
+
+    replica_catalog = (
+        workflow_params.existing_directory("workflow_directory") / "replicas.yml"
+    )
+    assert replica_catalog.exists()
+
+    transformations_catalog = (
+        workflow_params.existing_directory("workflow_directory") / "transformations.yml"
+    )
+    assert transformations_catalog.exists()
+
+    properties_file = (
+        workflow_params.existing_directory("workflow_directory") / "pegasus.properties"
+    )
+    assert properties_file.exists()
+
     submit_script_process = subprocess.Popen(
         ["sh", str(submit_script_one)],
         stdout=subprocess.PIPE,
@@ -159,6 +179,7 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "gaia",
+            "home_dir": str(tmp_path),
         }
     )
     slurm_params = Parameters.from_mapping(
@@ -206,8 +227,23 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
         resource_request=resources,
     )
 
-    replica_catalog = workflow_params.existing_directory("workflow_directory") / "rc.dat"
+    site_catalog = workflow_params.existing_directory("workflow_directory") / "sites.yml"
+    assert site_catalog.exists()
+
+    replica_catalog = (
+        workflow_params.existing_directory("workflow_directory") / "replicas.yml"
+    )
     assert replica_catalog.exists()
+
+    transformations_catalog = (
+        workflow_params.existing_directory("workflow_directory") / "transformations.yml"
+    )
+    assert transformations_catalog.exists()
+
+    properties_file = (
+        workflow_params.existing_directory("workflow_directory") / "pegasus.properties"
+    )
+    assert properties_file.exists()
 
     # Make sure the Replica Catalog is not empty
     assert replica_catalog.stat().st_size > 0
@@ -224,6 +260,7 @@ def test_clearing_ckpts(monkeypatch, tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "scavenge",
+            "home_dir": str(tmp_path),
         }
     )
 
@@ -261,6 +298,7 @@ def test_not_clearing_ckpts(monkeypatch, tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "scavenge",
+            "home_dir": str(tmp_path),
         }
     )
 
@@ -369,6 +407,7 @@ def test_dax_with_categories(tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "gaia",
+            "home_dir": str(tmp_path),
         }
     )
     workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
@@ -409,6 +448,7 @@ def test_dax_with_saga_categories(tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "gaia",
+            "home_dir": str(tmp_path),
         }
     )
     multiply_partition = "gaia"
@@ -477,6 +517,7 @@ def test_category_max_jobs(tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "gaia",
+            "home_dir": str(tmp_path),
         }
     )
     multiply_slurm_params = Parameters.from_mapping(
@@ -531,11 +572,26 @@ def test_category_max_jobs(tmp_path):
     workflow_builder.limit_jobs_for_category("gaia", 1)
     workflow_builder.write_dax_to_dir()
 
-    config = workflow_params.existing_directory("workflow_directory") / "pegasus.conf"
-    assert config.exists()
+    site_catalog = workflow_params.existing_directory("workflow_directory") / "sites.yml"
+    assert site_catalog.exists()
+
+    replica_catalog = (
+        workflow_params.existing_directory("workflow_directory") / "replicas.yml"
+    )
+    assert replica_catalog.exists()
+
+    transformations_catalog = (
+        workflow_params.existing_directory("workflow_directory") / "transformations.yml"
+    )
+    assert transformations_catalog.exists()
+
+    properties_file = (
+        workflow_params.existing_directory("workflow_directory") / "pegasus.properties"
+    )
+    assert properties_file.exists()
 
     # Make sure the config contains the appropriate maxjobs lines and no inappropriate maxjobs lines
-    with config.open("r") as f:
+    with properties_file.open("r") as f:
         lines = f.readlines()
     assert any("dagman.gaia.maxjobs=1" in line for line in lines)
     assert all("dagman.ephemeral.maxjobs=" not in line for line in lines)
@@ -556,6 +612,7 @@ def test_dax_test_exclude_nodes_on_saga(tmp_path):
             "namespace": "test",
             "partition": "gaia",
             "exclude_list": sample_exclude,
+            "home_dir": str(tmp_path),
         }
     )
     slurm_params = Parameters.from_mapping(

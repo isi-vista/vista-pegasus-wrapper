@@ -28,6 +28,7 @@ def test_composed_key_value_transform(tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "gaia",
+            "home_dir": str(tmp_path),
         }
     )
 

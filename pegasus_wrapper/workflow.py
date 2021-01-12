@@ -16,26 +16,31 @@ from vistautils.class_utils import fully_qualified_name
 from vistautils.io_utils import CharSink
 from vistautils.parameters import Parameters, YAMLParametersWriter
 
-from pegasus_wrapper import resources
 from pegasus_wrapper.artifact import DependencyNode, _canonicalize_depends_on
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
 from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.pegasus_utils import (
+    add_local_nas_to_sites,
+    add_saga_cluster_to_sites,
     build_submit_script,
-    path_to_pegasus_file,
-    path_to_pfn,
+    configure_saga_properities,
 )
 from pegasus_wrapper.resource_request import ResourceRequest
 from pegasus_wrapper.scripts import nuke_checkpoints
 
-from Pegasus.DAX3 import ADAG, Executable, File, Job, Link, Namespace
+from Pegasus.api import (
+    OS,
+    Arch,
+    File,
+    Job,
+    Properties,
+    ReplicaCatalog,
+    SiteCatalog,
+    Transformation,
+    TransformationCatalog,
+    Workflow,
+)
 from saga_tools.conda import CondaConfiguration
-
-try:
-    import importlib.resources as pkg_resources
-except ImportError:
-    # Try backported to PY <3.7 'importlib_resources'
-    import importlib_resources as pkg_resources
 
 
 @attrs(frozen=True, slots=True)
@@ -64,15 +69,27 @@ class WorkflowBuilder:
         kw_only=True,
     )
     # Pegasus' internal structure of the job requirements
-    _job_graph: ADAG = attrib(init=False)
+    _job_graph: Workflow = attrib(init=False)
     # Occassionally an identical job may be scheduled multiple times
     # in the workflow graph. We compute this based on a job signature
     # and only actually schedule the job once.
     _signature_to_job: Dict[Any, DependencyNode] = attrib(init=False, factory=dict)
     # Files already added to the job graph
     _added_files: Set[File] = attrib(init=False, factory=set)
-    # Path to the replica catalog to store checkpointed files
-    _replica_catalog: Path = attrib(validator=instance_of(Path))
+    # Replica Catalog created via API
+    # Files are added here now not the job graph
+    _replica_catalog: ReplicaCatalog = attrib(init=False, factory=ReplicaCatalog)
+    # Transformation Catalog created via API
+    # Executables (v4.9.3) are now called Transformations and stored here rather than the DAX
+    _transformation_catalog: TransformationCatalog = attrib(
+        init=False, factory=TransformationCatalog
+    )
+    # Sites Catalog created via API
+    # Used to track where operations can take place
+    _sites_catalog: SiteCatalog = attrib(init=False, factory=SiteCatalog)
+    # Pegasus Properties via API
+    # Tracks global properties for all workflows
+    _properties: Properties = attrib(init=False, factory=Properties)
     _category_to_max_jobs: Dict[str, int] = attrib(factory=dict)
     # Include an experiment_name so that jobs are more identifiable on SAGA,
     # opting for experiment_name over workflow_name bc of VISTA's use of
@@ -81,24 +98,30 @@ class WorkflowBuilder:
 
     @staticmethod
     def from_parameters(params: Parameters) -> "WorkflowBuilder":
-        workflow_directory = params.creatable_directory("workflow_directory")
-
-        replica_catalog = workflow_directory / "rc.dat"
-        if replica_catalog.exists():
-            replica_catalog.unlink()
-        replica_catalog.touch(mode=0o744)
-
-        return WorkflowBuilder(
+        wb = WorkflowBuilder(
             name=params.string("workflow_name", default="Workflow"),
             created_by=params.string("workflow_created", default="Default Constructor"),
-            workflow_directory=workflow_directory,
+            workflow_directory=params.creatable_directory("workflow_directory"),
             default_site=params.string("site"),
             conda_script_generator=CondaJobScriptGenerator.from_parameters(params),
             namespace=params.string("namespace"),
             default_resource_request=ResourceRequest.from_parameters(params),
             experiment_name=params.string("experiment_name", default=""),
-            replica_catalog=replica_catalog,
         )
+
+        if params.boolean("include_nas", default=True):
+            add_local_nas_to_sites(
+                wb._sites_catalog, params  # pylint: disable=protected-access
+            )
+        if params.boolean("include_saga", default=True):
+            add_saga_cluster_to_sites(
+                wb._sites_catalog, params  # pylint: disable=protected-access
+            )
+            configure_saga_properities(
+                wb._properties, params  # pylint: disable=protected-access
+            )
+
+        return wb
 
     def directory_for(self, locator: Locator) -> Path:
         """
@@ -116,6 +139,24 @@ class WorkflowBuilder:
             if self._experiment_name
             else locater_as_name
         )
+
+    def create_file(
+        self,
+        logical_file_name: str,
+        physical_file_path: Union[Path, str],
+        site: Optional[str] = None,
+        *,
+        add_to_catalog: bool = True,
+    ) -> File:
+        f = File(logical_file_name)
+        f.add_metadata(creator=self.created_by)
+        if add_to_catalog:
+            self._replica_catalog.add_replica(
+                site if site else self._default_site,
+                logical_file_name,
+                physical_file_path,
+            )
+        return f
 
     def run_python_on_parameters(
         self,
@@ -171,55 +212,50 @@ class WorkflowBuilder:
             working_directory=job_dir,
             script_path=script_path,
             params_path=job_dir / "____params.params",
-            stdout_file=stdout_path,
+            stdout_file=Path(stdout_path),
             ckpt_path=checkpoint_path,
             override_conda_config=override_conda_config,
             python="pypy3" if use_pypy else "python",
         )
-        script_executable = Executable(
+        script_executable = Transformation(
+            self._job_name_for(job_name),
             namespace=self._namespace,
-            name=self._job_name_for(job_name),
             version="4.0",
-            os="linux",
-            arch="x86_64",
+            site=self._default_site,
+            pfn=script_path,
+            is_stageable=False,
+            bypass_staging=False,
+            arch=Arch.X86_64,
+            os_type=OS.LINUX,
         )
-        script_executable.addPFN(path_to_pfn(script_path, site=self._default_site))
-        if not self._job_graph.hasExecutable(script_executable):
-            self._job_graph.addExecutable(script_executable)
+
+        self._transformation_catalog.add_transformations(script_executable)
+
         job = Job(script_executable)
-        self._job_graph.addJob(job)
+        self._job_graph.add_jobs(job)
         for parent_dependency in depends_on:
             if parent_dependency.job:
-                self._job_graph.depends(job, parent_dependency.job)
+                self._job_graph.add_dependency(job, parents=[parent_dependency.job])
             for out_file in parent_dependency.output_files:
-                job.uses(out_file, link=Link.INPUT)
+                job.add_inputs(out_file)
 
         resource_request = self.set_resource_request(resource_request)
 
         if category:
-            job.profile(Namespace.DAGMAN, "category", category)
+            job.add_dagman_profile(category=category)
+
         resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
 
         # Handle Output Files
         # This is currently only handled as the checkpoint file
         # See: https://github.com/isi-vista/vista-pegasus-wrapper/issues/25
-        checkpoint_pegasus_file = path_to_pegasus_file(
-            checkpoint_path, site=self._default_site, name=f"{ckpt_name}"
-        )
-
-        if checkpoint_pegasus_file not in self._added_files:
-            self._job_graph.addFile(checkpoint_pegasus_file)
-            self._added_files.add(checkpoint_pegasus_file)
-
         # If the checkpoint file already exists, we want to add it to the replica catalog
         # so that we don't run the job corresponding to the checkpoint file again
-        if checkpoint_path.exists():
-            with self._replica_catalog.open("a+") as handle:
-                handle.write(
-                    f"{ckpt_name} file://{checkpoint_path} site={self._default_site}\n"
-                )
+        checkpoint_pegasus_file = self.create_file(
+            f"{ckpt_name}", checkpoint_path, add_to_catalog=checkpoint_path.exists()
+        )
 
-        job.uses(checkpoint_pegasus_file, link=Link.OUTPUT, transfer=True)
+        job.add_outputs(checkpoint_pegasus_file)
 
         dependency_node = DependencyNode.from_job(
             job, output_files=[checkpoint_pegasus_file]
@@ -243,14 +279,12 @@ class WorkflowBuilder:
         """
         self._category_to_max_jobs[category] = max_jobs
 
-    def _conf_limits(self) -> str:
+    def _conf_limits(self) -> None:
         """
         Return a Pegasus config string which sets the max jobs per category appropriately.
         """
-        return "".join(
-            f"dagman.{category}.maxjobs={max_jobs}\n"
-            for category, max_jobs in self._category_to_max_jobs.items()
-        )
+        for category, max_jobs in self._category_to_max_jobs.items():
+            self._properties[f"dagman.{category}.maxjobs"] = max_jobs
 
     def _nuke_checkpoints_and_clear_rc(self, output_xml_dir: Path) -> None:
         subprocess.run(
@@ -259,9 +293,7 @@ class WorkflowBuilder:
             stderr=subprocess.PIPE,
             encoding="utf-8",
         )
-        self._replica_catalog.open(
-            "w"
-        ).close()  # open with `w` followed by close empties it
+        self._replica_catalog.write()
 
     def write_dax_to_dir(self, output_xml_dir: Optional[Path] = None) -> Path:
         if not output_xml_dir:
@@ -281,25 +313,30 @@ class WorkflowBuilder:
         dax_file = output_xml_dir / dax_file_name
         logging.info("Writing DAX to %s", dax_file)
         with dax_file.open("w") as dax:
-            self._job_graph.writeXML(dax)
+            self._job_graph.write(dax)
         build_submit_script(
             output_xml_dir / "submit.sh", dax_file_name, self._workflow_directory
         )
 
-        # We also need to write sites.xml and pegasus.conf
-        sites_xml_path = output_xml_dir / "sites.xml"
-        sites_xml_path.write_text(
-            pkg_resources.read_text(resources, "sites.xml"), encoding="utf-8"
-        )
+        # Write Out Sites Catalog
+        sites_yml_path = output_xml_dir / "sites.yml"
+        with sites_yml_path.open("w") as sites:
+            self._sites_catalog.write(sites)
 
-        pegasus_conf_path = output_xml_dir / "pegasus.conf"
-        pegasus_conf_path.write_text(
-            data=pkg_resources.read_text(resources, "pegasus.conf")
-            + "pegasus.catalog.replica=File\n"
-            + f"pegasus.catalog.replica.file={self._replica_catalog}\n"
-            + self._conf_limits(),
-            encoding="utf-8",
-        )
+        # Write Out Replica Catalog
+        replica_yml_path = output_xml_dir / "replicas.yml"
+        with replica_yml_path.open("w") as replicas:
+            self._replica_catalog.write(replicas)
+
+        # Write Out Transformation Catalog
+        transformation_yml_path = output_xml_dir / "transformations.yml"
+        with transformation_yml_path.open("w") as transformations:
+            self._transformation_catalog.write(transformations)
+
+        # Write Out Pegasus Properties
+        pegasus_conf_path = output_xml_dir / "pegasus.properties"
+        with pegasus_conf_path.open("w") as properties:
+            self._properties.write(properties)
 
         return dax_file
 
@@ -307,8 +344,7 @@ class WorkflowBuilder:
         return self._conda_script_generator.conda_config
 
     @_job_graph.default
-    def _init_job_graph(self) -> ADAG:
-        ret = ADAG(self.name)
-        ret.metadata("name", self.name)
-        ret.metadata("createdby", self.created_by)
+    def _init_job_graph(self) -> Workflow:
+        ret = Workflow(self.name)
+        ret.add_metadata(name=self.name, createdby=self.created_by)
         return ret

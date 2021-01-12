@@ -1,3 +1,4 @@
 example_root_dir: example/path
 conda_environment: "pegasus-wrapper"
 conda_base_path: /path/to/conda/install
+home_dir: /nas/home/yourdir

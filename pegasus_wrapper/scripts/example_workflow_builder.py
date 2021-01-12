@@ -32,6 +32,8 @@ def example_workflow(params: Parameters):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
+            "home_dir": str(tmp_path),
+            "partition": "scavenge",
         }
     )
 

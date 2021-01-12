@@ -9,7 +9,7 @@ from vistautils.memory_amount import MemoryAmount
 from vistautils.parameters import Parameters
 from vistautils.range import Range
 
-from Pegasus.DAX3 import Job, Namespace, Profile
+from Pegasus.api import Job, Namespace
 from saga_tools.slurm import to_slurm_memory_string
 from typing_extensions import Protocol
 
@@ -219,12 +219,11 @@ class SlurmResourceRequest(ResourceRequest):
         logging.debug(
             "Slurm Resource Request for %s: %s", job_name, slurm_resource_content
         )
-        job.addProfile(
-            Profile(Namespace.PEGASUS, "glite.arguments", slurm_resource_content)
+        job.add_profiles(
+            Namespace.PEGASUS, key="glite.arguments", value=slurm_resource_content
         )
-        category_profile = Profile(Namespace.DAGMAN, "category", self.partition)
-        if not job.hasProfile(category_profile):
-            job.addProfile(category_profile)
+        if "category" not in job.profiles.keys():
+            job.add_profiles(Namespace.DAGMAN, key="category", value=str(self.partition))
 
 
 SLURM_RESOURCE_STRING = """--{qos_or_account} --partition {partition} --ntasks 1
