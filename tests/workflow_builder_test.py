@@ -1,7 +1,4 @@
 import subprocess
-import xml.etree.ElementTree as ET
-import xml.sax as sax
-import xml.sax.handler as saxhandler
 from random import Random
 
 from immutablecollections import immutableset
@@ -16,6 +13,7 @@ from pegasus_wrapper.scripts.sort_nums_in_file import main as sort_nums_main
 from pegasus_wrapper.workflow import WorkflowBuilder
 
 import pytest
+from yaml import SafeLoader, load
 
 
 def test_simple_dax(tmp_path):
@@ -227,6 +225,8 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
         resource_request=resources,
     )
 
+    workflow_builder.write_dax_to_dir()
+
     site_catalog = workflow_params.existing_directory("workflow_directory") / "sites.yml"
     assert site_catalog.exists()
 
@@ -325,61 +325,6 @@ def test_not_clearing_ckpts(monkeypatch, tmp_path):
     assert checkpointed_multiply_file.exists()
 
 
-class _JobWithNameHasCategoryHandler(saxhandler.ContentHandler):
-    """
-    SAX handler which checks whether a DAX file
-    specifies a job with a certain name and category
-    (specified respectively by `target_job_name` and `category`).
-    """
-
-    def __init__(self, target_job_name, category):
-        super().__init__()
-        self.target_job_name = target_job_name
-        self.category = category
-        self._in_target_job = False
-        self._in_target_job_category = False
-        self._job_category_content = []
-        self._job_has_category = False
-
-    def _element_is_target_job(self, name, attrs) -> bool:
-        return name == "job" and attrs.get("name") == self.target_job_name
-
-    @staticmethod
-    def _element_sets_job_category(name, attrs) -> bool:
-        return (
-            name == "profile"
-            and attrs.get("namespace") == "dagman"
-            and attrs.get("key") == "category"
-        )
-
-    def startElement(self, name, attrs):
-        if self._element_is_target_job(name, attrs):
-            self._in_target_job = True
-        elif self._in_target_job and self._element_sets_job_category(name, attrs):
-            self._in_target_job_category = True
-
-    def characters(self, content):
-        if self._in_target_job_category:
-            self._job_category_content.append(content)
-
-    def endElement(self, name):
-        # Assume jobs are never nested
-        if name == "job":
-            self._in_target_job = False
-        # If we just finished one of the target job's category profile tags, check if it specifies
-        # the expected category.
-        elif name == "profile" and self._in_target_job_category:
-            category = "".join(self._job_category_content).strip()
-            # category will always be a string, need to convert any object or non-str to compare
-            if category == str(self.category):
-                self._job_has_category = True
-            self._job_category_content = []
-            self._in_target_job_category = False
-
-    def job_had_target_category(self) -> bool:
-        return self._job_has_category
-
-
 def _job_in_dax_has_category(dax_file, target_job_locator, category):
     """
     Return whether the given DAX file has a job
@@ -387,14 +332,18 @@ def _job_in_dax_has_category(dax_file, target_job_locator, category):
     which has the category `category`.
     """
     target_job_name = str(target_job_locator).replace("/", "_")
-    handler = _JobWithNameHasCategoryHandler(
-        target_job_name=target_job_name, category=category
-    )
 
     with dax_file.open("r") as f:
-        sax.parse(f, handler=handler)
+        data = load(f, Loader=SafeLoader)
 
-    return handler.job_had_target_category()
+    for item in data["jobs"]:
+        if item["name"] == target_job_name:
+            if "dagman" in item["profiles"].keys():
+                if "CATEGORY" in item["profiles"]["dagman"].keys():
+                    if item["profiles"]["dagman"]["CATEGORY"] == category:
+                        return True
+
+    return False
 
 
 def test_dax_with_categories(tmp_path):
@@ -593,8 +542,10 @@ def test_category_max_jobs(tmp_path):
     # Make sure the config contains the appropriate maxjobs lines and no inappropriate maxjobs lines
     with properties_file.open("r") as f:
         lines = f.readlines()
-    assert any("dagman.gaia.maxjobs=1" in line for line in lines)
-    assert all("dagman.ephemeral.maxjobs=" not in line for line in lines)
+    for line in lines:
+        print(line)
+    assert any("dagman.gaia.maxjobs = 1" in line for line in lines)
+    assert all("dagman.ephemeral.maxjobs =" not in line for line in lines)
 
 
 def test_dax_test_exclude_nodes_on_saga(tmp_path):
@@ -657,20 +608,23 @@ def test_dax_test_exclude_nodes_on_saga(tmp_path):
     )
 
     dax_file = workflow_builder.write_dax_to_dir(tmp_path)
-    tree = ET.parse(dax_file.absolute())
-    root = tree.getroot()
+    with dax_file.open("r") as dax:
+        dax_yaml = load(dax, Loader=SafeLoader)
+    root = dax_yaml["jobs"]
 
     for item in root:
-        if item.tag.endswith("job"):
-            for item2 in item.getchildren():
-                if item2.tag.endswith("profile"):
-                    if item2.attrib["namespace"] == "pegasus":
-                        if item.attrib["name"] == "jobs_multiply":
-                            assert f"--exclude={sample_exclude}" in item2.text
-                        elif item.attrib["name"] == "jobs_sort":
-                            assert f"--exclude=" in item2.text
-                            assert f"--nodelist={sample_include}" in item2.text
-                        else:
-                            assert False
-
-    return tree
+        if item["type"] == "job":
+            if "pegasus" in item["profiles"]:
+                if item["name"] == "jobs_multiply":
+                    assert (
+                        f"--exclude={sample_exclude}"
+                        in item["profiles"]["pegasus"]["glite.arguments"]
+                    )
+                elif item["name"] == "jobs_sort":
+                    assert f"--exclude=" in item["profiles"]["pegasus"]["glite.arguments"]
+                    assert (
+                        f"--nodelist={sample_include}"
+                        in item["profiles"]["pegasus"]["glite.arguments"]
+                    )
+                else:
+                    assert False

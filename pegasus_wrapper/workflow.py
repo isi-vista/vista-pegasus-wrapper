@@ -284,7 +284,7 @@ class WorkflowBuilder:
         Return a Pegasus config string which sets the max jobs per category appropriately.
         """
         for category, max_jobs in self._category_to_max_jobs.items():
-            self._properties[f"dagman.{category}.maxjobs"] = max_jobs
+            self._properties[f"dagman.{category}.maxjobs"] = str(max_jobs)
 
     def _nuke_checkpoints_and_clear_rc(self, output_xml_dir: Path) -> None:
         subprocess.run(
@@ -334,6 +334,7 @@ class WorkflowBuilder:
             self._transformation_catalog.write(transformations)
 
         # Write Out Pegasus Properties
+        self._conf_limits()
         pegasus_conf_path = output_xml_dir / "pegasus.properties"
         with pegasus_conf_path.open("w") as properties:
             self._properties.write(properties)

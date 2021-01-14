@@ -222,11 +222,12 @@ class SlurmResourceRequest(ResourceRequest):
         job.add_profiles(
             Namespace.PEGASUS, key="glite.arguments", value=slurm_resource_content
         )
-        if "category" not in job.profiles.keys():
-            job.add_profiles(Namespace.DAGMAN, key="category", value=str(self.partition))
+        if (
+            "dagman" not in job.profiles.keys()
+            or "CATEGORY" not in job.profiles["dagman"].keys()
+        ):
+            job.add_dagman_profile(category=str(self.partition))
 
 
-SLURM_RESOURCE_STRING = """--{qos_or_account} --partition {partition} --ntasks 1
- --cpus-per-task {num_cpus} --gpus-per-task {num_gpus} --job-name {job_name} --mem {mem_str}
- --time {time}"""
+SLURM_RESOURCE_STRING = """--{qos_or_account} --partition {partition} --ntasks 1 --cpus-per-task {num_cpus} --gpus-per-task {num_gpus} --job-name {job_name} --mem {mem_str} --time {time}"""
 _BACKEND_PARAM = "backend"
