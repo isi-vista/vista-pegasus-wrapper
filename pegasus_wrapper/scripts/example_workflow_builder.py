@@ -4,14 +4,12 @@ from vistautils.parameters import Parameters
 from vistautils.parameters_only_entrypoint import parameters_only_entry_point
 
 from pegasus_wrapper import (
-    experiment_directory,
     initialize_vista_pegasus_wrapper,
     run_python_on_parameters,
     write_workflow_description,
 )
 from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator
-from pegasus_wrapper.pegasus_utils import build_submit_script
 from pegasus_wrapper.scripts import multiply_by_x, sort_nums_in_file
 
 
