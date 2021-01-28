@@ -28,9 +28,10 @@ This library simplifies the process of writing a profile which can be converted 
 Using [WorkflowBuilder from `workflow.py`](pegasus_wrapper/workflow.py) develop a function to generate a `Workflow.dax`.
 See [example_workflow](pegasus_wrapper/scripts/example_workflow_builder.py) for an extremely simple workflow which we will use to demonstrate the process.
 To see the example workflow add a `root.params` file to the parameters directory with the following:
-*Note the Directory should be in your $Home and not a NFS like /nas/gaia/ as the submission will fail for an NFS reason*
 ```
 example_root_dir: "path/to/output/dir/"
+conda_environment: "pegasus-wrapper"
+conda_base_path: "path/to/conda"
 ```
 run `python -m pegasus_wrapper.scripts.example_workflow_builder parameters/root.params` from this project's root folder.
 
@@ -38,8 +39,7 @@ The log output will provide you the output location of the `Text.dax` Assuming y
 
 ```
 cd "path/to/output/dir"
-pegasus-plan --conf pegasus.conf --dax Test.dax --dir "path/to/output/dir" --relative-dir exampleRun-001
-pegasus-run "path/to/output/dir/"exampleRun-001
+./submit.sh
 ```
 The example workflow submits **ONLY** to `scavenge`. In an actual workflow we would recommend parameterizing it.
 
@@ -57,11 +57,6 @@ Use run_on_single_node parameter when you initialize a workflow (or a Slurm reso
 * Note you cannot use this option with the **exclude_list** option.
 * Note you cannot specify more than one node using this option.
 
-## What are valid root directories for the workflow?
-
-Currently the root directory should be be in your home directory and not on an NAS like `/nas/gaia/` as the submission will fail for an NFS reason.
-The experiment directory can be (and ought to be) on such a drive, though.
-
 # Common Errors
 
 ## Mismatching partition selection and max walltime
@@ -72,7 +67,7 @@ Partitions each have a max walltime associated with them. See the saga cluster w
 
 If you change code while a pipeline is runnning, the jobs will pick up the changes. This could be helpful if you notice an error and fix it before that code runs, but can also lead to some unexpected behavior.
 
-## `No module named 'Pegasus'`
+## `No module named 'Pegasus'` (Version 4.9.3)
 
 This is a weird one that pops up usually when first getting set up with Pegasus. First, if you see this please contact one of the maintainers (currently @joecummings or @spigo900). To fix this, install the following packages with these commands in this exact order - they are dependent on each other.
 1. `pip install git+https://github.com/pegasus-isi/pegasus/#egg=pegasus-wms.common&subdirectory=packages/pegasus-common`
@@ -84,6 +79,10 @@ This is a weird one that pops up usually when first getting set up with Pegasus.
 ## Debugging from `srun` fails to load `cuda` and `cudnn`
 
 A new node gotten with `srun` does not load the Spack modules you usually have set up in your runtime scripts. You need to manually install these if you want to work with Tensorflow or anything requiring Cuda.
+
+# Updating from wrapper script to use Pegasus5.0.0 from Pegasus4.9.3
+
+No changes should be needed for any project using the previous version of the wrapper which supported Pegasus4.9.3.
 
 # Contributing
 
