@@ -322,16 +322,25 @@ class WorkflowBuilder:
         sites_yml_path = output_xml_dir / "sites.yml"
         with sites_yml_path.open("w") as sites:
             self._sites_catalog.write(sites)
+        self._properties["pegasus.catalog.site.file"] = str(sites_yml_path.absolute())
 
         # Write Out Replica Catalog
         replica_yml_path = output_xml_dir / "replicas.yml"
         with replica_yml_path.open("w") as replicas:
             self._replica_catalog.write(replicas)
+        self._properties["pegasus.catalog.replica"] = "YAML"
+        self._properties["pegasus.catalog.replica.file"] = str(
+            replica_yml_path.absolute()
+        )
 
         # Write Out Transformation Catalog
         transformation_yml_path = output_xml_dir / "transformations.yml"
         with transformation_yml_path.open("w") as transformations:
             self._transformation_catalog.write(transformations)
+        self._properties["pegasus.catalog.transformation"] = "YAML"
+        self._properties["pegasus.catalog.transformation.file"] = str(
+            transformation_yml_path.absolute()
+        )
 
         # Write Out Pegasus Properties
         self._conf_limits()

@@ -40,7 +40,7 @@ def build_submit_script(path: Path, dax_file: str, workflow_directory: Path) -> 
 def add_local_nas_to_sites(
     sites_catalog: SiteCatalog, params: Parameters = Parameters.empty()
 ) -> None:
-    home = params.string("home_dir")
+    home = Path.home()
     shared_scratch_dir = params.string(
         "local_shared_scratch", default=f"{home}/workflows/scratch"
     )
