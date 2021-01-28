@@ -83,20 +83,8 @@ def example_workflow(params: Parameters):
         # resource_request=SlurmResourceRequest.from_parameters(slurm_params),
     )
 
-    # Generate the Pegasus DAX file
-    dax_file = write_workflow_description(tmp_path)
-
-    submit_script = tmp_path / "submit_script.sh"
-
-    # Our attempt at an easy submit file, it MAY NOT be accurate for more complicated
-    # workflows but it
-    # does work for this simple example.
-    # See https://github.com/isi-vista/vista-pegasus-wrapper/issues/27
-    build_submit_script(
-        submit_script,
-        str(dax_file),
-        experiment_directory(),  # pylint:disable=protected-access
-    )
+    # Generate the Pegasus DAX file & a Submit Script
+    write_workflow_description(tmp_path)
 
 
 if __name__ == "__main__":
