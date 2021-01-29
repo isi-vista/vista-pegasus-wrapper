@@ -79,9 +79,7 @@ def add_saga_cluster_to_sites(
     )
 
     # Profiles
-    saga.add_pegasus_profile(
-        style="glite", auxillary_local=True, runtime="1440", queue="normal"
-    )
+    saga.add_pegasus_profile(style="glite", auxillary_local=True)
     saga.add_condor_profile(grid_resource="batch slurm")
 
     sites_catalog.add_sites(saga)

@@ -212,7 +212,7 @@ class SlurmResourceRequest(ResourceRequest):
             slurm_resource_content += f" --qos={self.partition.name}"
 
         job.add_pegasus_profile(
-            runtime=self.convert_time_to_slurm_format(self.job_time_in_minutes),
+            runtime=self.job_time_in_minutes,
             queue=str(self.partition.name),
             project=None
             if self.partition.name in (EPHEMERAL, SCAVENGE)
