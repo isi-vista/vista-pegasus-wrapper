@@ -159,12 +159,12 @@ class SlurmResourceRequest(ResourceRequest):
 
     def unify(self, other: ResourceRequest) -> ResourceRequest:
         if isinstance(other, SlurmResourceRequest):
-            partition = other.partition or self.partition
+            partition = other.partition
         else:
             partition = self.partition
 
         return SlurmResourceRequest(
-            partition=partition,
+            partition=partition.name,
             memory=other.memory or self.memory,
             num_cpus=other.num_cpus or self.num_cpus,
             num_gpus=other.num_gpus if other.num_gpus is not None else self.num_gpus,
