@@ -9,7 +9,7 @@ from vistautils.memory_amount import MemoryAmount
 from vistautils.parameters import Parameters
 from vistautils.range import Range
 
-from Pegasus.api import Job, Namespace
+from Pegasus.api import Job
 from saga_tools.slurm import to_slurm_memory_string
 from typing_extensions import Protocol
 
@@ -164,7 +164,7 @@ class SlurmResourceRequest(ResourceRequest):
             partition = self.partition
 
         return SlurmResourceRequest(
-            partition=partition.name,
+            partition=partition,
             memory=other.memory or self.memory,
             num_cpus=other.num_cpus or self.num_cpus,
             num_gpus=other.num_gpus if other.num_gpus is not None else self.num_gpus,
@@ -186,19 +186,11 @@ class SlurmResourceRequest(ResourceRequest):
                 f"Partition '{self.partition.name}' has a max walltime of {self.partition.max_walltime} mins, which is less than the time given ({self.job_time_in_minutes} mins) for job: {job_name}."
             )
 
-        qos_or_account = (
-            f"qos {self.partition.name}"
-            if self.partition.name in (SCAVENGE, EPHEMERAL)
-            else f"account {self.partition.name}"
-        )
         slurm_resource_content = SLURM_RESOURCE_STRING.format(
-            qos_or_account=qos_or_account,
-            partition=self.partition.name,
             num_cpus=self.num_cpus or 1,
             num_gpus=self.num_gpus if self.num_gpus is not None else 0,
             job_name=job_name,
             mem_str=to_slurm_memory_string(self.memory or _SLURM_DEFAULT_MEMORY),
-            time=self.convert_time_to_slurm_format(self.job_time_in_minutes),
         )
 
         if (
@@ -216,12 +208,18 @@ class SlurmResourceRequest(ResourceRequest):
         if self.run_on_single_node:
             slurm_resource_content += f" --nodelist={self.run_on_single_node}"
 
-        logging.debug(
-            "Slurm Resource Request for %s: %s", job_name, slurm_resource_content
+        if self.partition.name in (SCAVENGE, EPHEMERAL):
+            slurm_resource_content += f" --qos={self.partition.name}"
+
+        job.add_pegasus_profile(
+            runtime=self.convert_time_to_slurm_format(self.job_time_in_minutes),
+            queue=str(self.partition.name),
+            project=None
+            if self.partition.name in (EPHEMERAL, SCAVENGE)
+            else self.partition.name,
+            glite_arguments=slurm_resource_content,
         )
-        job.add_profiles(
-            Namespace.PEGASUS, key="glite.arguments", value=slurm_resource_content
-        )
+
         if (
             "dagman" not in job.profiles.keys()
             or "CATEGORY" not in job.profiles["dagman"].keys()
@@ -229,5 +227,5 @@ class SlurmResourceRequest(ResourceRequest):
             job.add_dagman_profile(category=str(self.partition))
 
 
-SLURM_RESOURCE_STRING = """--{qos_or_account} --partition {partition} --ntasks 1 --cpus-per-task {num_cpus} --gpus-per-task {num_gpus} --job-name {job_name} --mem {mem_str} --time {time}"""
+SLURM_RESOURCE_STRING = """--ntasks=1 --cpus-per-task={num_cpus} --gpus-per-task={num_gpus} --job-name={job_name} --mem={mem_str}"""
 _BACKEND_PARAM = "backend"
