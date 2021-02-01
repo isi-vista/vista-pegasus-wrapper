@@ -1,4 +1,3 @@
-#git+https://github.com/pegasus-isi/pegasus.git@7d70c4a18f4df30090c830c5b07f388df88b44e2#egg=pegasus-wms&subdirectory=lib/pegasus/python
 pegasus-wms.api==5.0.0
 git+https://github.com/isi-vista/saga-tools.git@master#egg=saga-tools
 PyYAML==5.3.1
