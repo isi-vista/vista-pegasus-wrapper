@@ -15,7 +15,7 @@ Terminology
 - an `Artifact` is a pairing of a value together with one or more `DependencyNode`\ s.
 """
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 from vistautils.parameters import Parameters
 
@@ -25,6 +25,7 @@ from pegasus_wrapper.resource_request import ResourceRequest
 from pegasus_wrapper.version import version as __version__  # noqa
 from pegasus_wrapper.workflow import WorkflowBuilder
 
+from Pegasus.api import Container
 from saga_tools.conda import CondaConfiguration
 
 _SINGLETON_WORKFLOW_BUILDER: WorkflowBuilder = None  # type: ignore
@@ -101,6 +102,32 @@ def default_conda_configuration() -> CondaConfiguration:
 def write_workflow_description(output_xml_dir: Optional[Path] = None) -> Path:
     _assert_singleton_workflow_builder()
     return _SINGLETON_WORKFLOW_BUILDER.write_dax_to_dir(output_xml_dir)
+
+
+def add_container(
+    container_name: str,
+    container_type: str,
+    image: str,
+    *,
+    arguments: Optional[str] = None,
+    mounts: Optional[List[str]] = None,
+    image_site: Optional[str] = None,
+    checksum: Optional[Mapping[str, str]] = None,
+    metadata: Optional[Mapping[str, Union[float, int, str]]] = None,
+    bypass_staging: bool = False,
+) -> Container:
+    _assert_singleton_workflow_builder()
+    return _SINGLETON_WORKFLOW_BUILDER.add_container(
+        container_name,
+        container_type,
+        image,
+        arguments=arguments,
+        mounts=mounts,
+        image_site=image_site,
+        checksum=checksum,
+        metadata=metadata,
+        bypass_staging=bypass_staging,
+    )
 
 
 def experiment_directory() -> Path:

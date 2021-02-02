@@ -7,11 +7,12 @@ and should instead use the methods in the root of the package.
 import logging
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, Optional, Set, Union
+from typing import Any, Dict, List, Mapping, Optional, Set, Union
 
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
 
+from immutablecollections import immutabledict
 from vistautils.class_utils import fully_qualified_name
 from vistautils.io_utils import CharSink
 from vistautils.parameters import Parameters, YAMLParametersWriter
@@ -31,6 +32,7 @@ from pegasus_wrapper.scripts import nuke_checkpoints
 from Pegasus.api import (
     OS,
     Arch,
+    Container,
     File,
     Job,
     Properties,
@@ -41,6 +43,14 @@ from Pegasus.api import (
     Workflow,
 )
 from saga_tools.conda import CondaConfiguration
+
+_STR_TO_CONTAINER_TYPE = immutabledict(
+    {
+        "docker": Container.DOCKER,
+        "singularity": Container.SINGULARITY,
+        "shifter": Container.SHIFTER,
+    }
+)
 
 
 @attrs(frozen=True, slots=True)
@@ -264,6 +274,40 @@ class WorkflowBuilder:
 
         logging.info("Scheduled Python job %s", job_name)
         return dependency_node
+
+    def add_container(
+        self,
+        container_name: str,
+        container_type: str,
+        image: str,
+        *,
+        arguments: Optional[str] = None,
+        mounts: Optional[List[str]] = None,
+        image_site: Optional[str] = None,
+        checksum: Optional[Mapping[str, str]] = None,
+        metadata: Optional[Mapping[str, Union[float, int, str]]] = None,
+        bypass_staging: bool = False,
+    ) -> Container:
+
+        if container_type not in _STR_TO_CONTAINER_TYPE.keys():
+            raise ValueError(
+                f"Container Type = {container_type} is not a valid container type. Valid options are {[f'{key}, ' for key in _STR_TO_CONTAINER_TYPE.keys()]}"
+            )
+
+        container = Container(
+            container_name,
+            container_type=_STR_TO_CONTAINER_TYPE[container_type],
+            image=image,
+            arguments=arguments,
+            mounts=mounts,
+            image_site=image_site,
+            checksum=immutabledict(checksum) if checksum else None,
+            metadata=immutabledict(metadata) if metadata else None,
+            bypass_staging=bypass_staging,
+        )
+
+        self._transformation_catalog.add_containers(container)
+        return container
 
     def set_resource_request(self, resource_request: ResourceRequest):
         if resource_request is not None:
