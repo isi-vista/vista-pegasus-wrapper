@@ -40,7 +40,7 @@ def build_submit_script(path: Path, dax_file: str, workflow_directory: Path) -> 
 def add_local_nas_to_sites(
     sites_catalog: SiteCatalog, params: Parameters = Parameters.empty()
 ) -> None:
-    home = Path.home()
+    home = params.string("home_dir", default=str(Path.home().absolute()))
     shared_scratch_dir = params.string(
         "local_shared_scratch", default=f"{home}/workflows/scratch"
     )
@@ -61,7 +61,7 @@ def add_local_nas_to_sites(
 def add_saga_cluster_to_sites(
     sites_catalog: SiteCatalog, params: Parameters = Parameters.empty()
 ) -> None:
-    home = params.string("home_dir")
+    home = params.string("home_dir", default=str(Path.home().absolute()))
 
     shared_scratch_dir = params.string(
         "saga_shared_scratch", default=f"{home}/workflows/shared-scratch"
