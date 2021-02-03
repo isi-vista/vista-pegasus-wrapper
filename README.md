@@ -1,6 +1,3 @@
-<!-- 
-[![Build status](https://ci.appveyor.com/api/projects/status/3jhdnwreqoni1492/branch/master?svg=true)](https://ci.appveyor.com/project/isi-vista/vista-pegasus-wrapper/branch/master) 
--->
 [![Build status](https://travis-ci.com/isi-vista/vista-pegasus-wrapper.svg?branch=master)](https://travis-ci.com/isi-vista/vista-pegasus-wrapper?branch=master)
 [![codecov](https://codecov.io/gh/isi-vista/vista-pegasus-wrapper/branch/master/graph/badge.svg)](https://codecov.io/gh/isi-vista/vista-pegasus-wrapper)
 
@@ -47,6 +44,8 @@ Our current system places `ckpt` files to indicate that a job has finished in th
 
 A [Nuke Checkpoints](scripts/nuke_checkpoints.py) script is provided for ease of removing checkpoint files. To use, pass a directory location as the launch parameter and the script will remove checkpoint files from the directory and all sub-directories.
 
+It is recommended to use a shared directory on the NAS, e.g. `/nas/gaia` to host a workflow under as compared to a users `/nas/user/xyz` home directory due to space limitations on the NAS.
+
 # FAQ
 ## How can I exclude some nodes?
 
@@ -68,6 +67,7 @@ Partitions each have a max walltime associated with them. See the saga cluster w
 If you change code while a pipeline is runnning, the jobs will pick up the changes. This could be helpful if you notice an error and fix it before that code runs, but can also lead to some unexpected behavior.
 
 ## `No module named 'Pegasus'` (Version 4.9.3)
+*This is believed to have been fixed for Pegasus Version 5. If this arrises please leave an issue*
 
 This is a weird one that pops up usually when first getting set up with Pegasus. First, if you see this please contact one of the maintainers (currently @joecummings or @spigo900). To fix this, install the following packages with these commands in this exact order - they are dependent on each other.
 1. `pip install git+https://github.com/pegasus-isi/pegasus/#egg=pegasus-wms.common&subdirectory=packages/pegasus-common`
