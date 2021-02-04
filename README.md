@@ -67,14 +67,7 @@ Partitions each have a max walltime associated with them. See the saga cluster w
 If you change code while a pipeline is runnning, the jobs will pick up the changes. This could be helpful if you notice an error and fix it before that code runs, but can also lead to some unexpected behavior.
 
 ## `No module named 'Pegasus'` (Version 4.9.3)
-*This is believed to have been fixed for Pegasus Version 5. If this arrises please leave an issue*
-
-This is a weird one that pops up usually when first getting set up with Pegasus. First, if you see this please contact one of the maintainers (currently @joecummings or @spigo900). To fix this, install the following packages with these commands in this exact order - they are dependent on each other.
-1. `pip install git+https://github.com/pegasus-isi/pegasus/#egg=pegasus-wms.common&subdirectory=packages/pegasus-common`
-2. `pip install git+https://github.com/pegasus-isi/pegasus/#egg=pegasus-wms.api&subdirectory=packages/pegasus-api`
-3. `pip install git+https://github.com/pegasus-isi/pegasus/#egg=pegasus-wms.dax&subdirectory=packages/pegasus-dax-python`
-4. `pip install git+https://github.com/pegasus-isi/pegasus/#egg=pegasus-wms.worker&subdirectory=packages/pegasus-worker`
-5. `pip install git+https://github.com/pegasus-isi/pegasus/#egg=pegasus-wms&subdirectory=packages/pegasus-python`
+*This is believed to have been fixed for Pegasus Version 5. If this arises please leave an issue*
 
 ## Debugging from `srun` fails to load `cuda` and `cudnn`
 

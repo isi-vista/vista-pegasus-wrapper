@@ -281,7 +281,7 @@ class WorkflowBuilder:
 
     def _conf_limits(self) -> None:
         """
-        Return a Pegasus config string which sets the max jobs per category appropriately.
+        Configure the internal Pegasus Properties dicts correctly for the category limits
         """
         for category, max_jobs in self._category_to_max_jobs.items():
             self._properties[f"dagman.{category}.maxjobs"] = str(max_jobs)
