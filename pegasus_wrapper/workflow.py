@@ -179,6 +179,7 @@ class WorkflowBuilder:
         override_conda_config: Optional[CondaConfiguration] = None,
         category: Optional[str] = None,
         use_pypy: bool = False,
+        container: Optional[Container] = None,
     ) -> DependencyNode:
         """
         Schedule a job to run the given *python_module* on the given *parameters*.
@@ -237,6 +238,7 @@ class WorkflowBuilder:
             bypass_staging=False,
             arch=Arch.X86_64,
             os_type=OS.LINUX,
+            container=container,
         )
 
         self._transformation_catalog.add_transformations(script_executable)
@@ -279,7 +281,7 @@ class WorkflowBuilder:
         self,
         container_name: str,
         container_type: str,
-        image: str,
+        image: Union[str, Path],
         *,
         arguments: Optional[str] = None,
         mounts: Optional[List[str]] = None,
@@ -288,6 +290,13 @@ class WorkflowBuilder:
         metadata: Optional[Mapping[str, Union[float, int, str]]] = None,
         bypass_staging: bool = False,
     ) -> Container:
+        """
+        Add a container to the transformation catalog, to be used on a Job request
+
+        `container_type` should be 'docker', 'singularity' or 'shifter'.
+
+        Returns the created `Container`
+        """
 
         if container_type not in _STR_TO_CONTAINER_TYPE.keys():
             raise ValueError(
@@ -297,7 +306,7 @@ class WorkflowBuilder:
         container = Container(
             container_name,
             container_type=_STR_TO_CONTAINER_TYPE[container_type],
-            image=image,
+            image=str(image.absolute()) if isinstance(image, Path) else image,
             arguments=arguments,
             mounts=mounts,
             image_site=image_site,
