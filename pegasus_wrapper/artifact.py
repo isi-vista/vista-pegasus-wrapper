@@ -13,7 +13,7 @@ from immutablecollections import ImmutableSet, immutableset
 from pegasus_wrapper.locator import Locator
 
 from more_itertools import collapse
-from Pegasus.DAX3 import File, Job
+from Pegasus.api import File, Job
 from typing_extensions import Protocol
 
 

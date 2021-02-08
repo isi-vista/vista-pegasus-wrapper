@@ -4,14 +4,12 @@ from vistautils.parameters import Parameters
 from vistautils.parameters_only_entrypoint import parameters_only_entry_point
 
 from pegasus_wrapper import (
-    experiment_directory,
     initialize_vista_pegasus_wrapper,
     run_python_on_parameters,
     write_workflow_description,
 )
 from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator
-from pegasus_wrapper.pegasus_utils import build_submit_script
 from pegasus_wrapper.scripts import multiply_by_x, sort_nums_in_file
 
 
@@ -32,6 +30,8 @@ def example_workflow(params: Parameters):
             "workflow_directory": str(tmp_path / "working"),
             "site": "saga",
             "namespace": "test",
+            "home_dir": str(tmp_path),
+            "partition": "scavenge",
         }
     )
 
@@ -81,20 +81,8 @@ def example_workflow(params: Parameters):
         # resource_request=SlurmResourceRequest.from_parameters(slurm_params),
     )
 
-    # Generate the Pegasus DAX file
-    dax_file = write_workflow_description(tmp_path)
-
-    submit_script = tmp_path / "submit_script.sh"
-
-    # Our attempt at an easy submit file, it MAY NOT be accurate for more complicated
-    # workflows but it
-    # does work for this simple example.
-    # See https://github.com/isi-vista/vista-pegasus-wrapper/issues/27
-    build_submit_script(
-        submit_script,
-        str(dax_file),
-        experiment_directory(),  # pylint:disable=protected-access
-    )
+    # Generate the Pegasus DAX file & a Submit Script
+    write_workflow_description(tmp_path)
 
 
 if __name__ == "__main__":

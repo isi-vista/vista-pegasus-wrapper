@@ -1,7 +1,4 @@
 import subprocess
-import xml.etree.ElementTree as ET
-import xml.sax as sax
-import xml.sax.handler as saxhandler
 from random import Random
 
 from immutablecollections import immutableset
@@ -16,6 +13,7 @@ from pegasus_wrapper.scripts.sort_nums_in_file import main as sort_nums_main
 from pegasus_wrapper.workflow import WorkflowBuilder
 
 import pytest
+from yaml import SafeLoader, load
 
 
 def test_simple_dax(tmp_path):
@@ -29,6 +27,7 @@ def test_simple_dax(tmp_path):
             "namespace": "test",
             "partition": "gaia",
             "experiment_name": "fred",
+            "home_dir": str(tmp_path),
         }
     )
     workflow_builder = WorkflowBuilder.from_parameters(params)
@@ -67,6 +66,7 @@ def test_dax_with_job_on_saga(tmp_path):
             "namespace": "test",
             "partition": "gaia",
             "experiment_name": "fred",
+            "home_dir": str(tmp_path),
         }
     )
     slurm_params = Parameters.from_mapping(
@@ -137,6 +137,24 @@ def test_dax_with_job_on_saga(tmp_path):
     assert submit_script_one.exists()
     assert submit_script_two.exists()
 
+    site_catalog = workflow_params.existing_directory("workflow_directory") / "sites.yml"
+    assert site_catalog.exists()
+
+    replica_catalog = (
+        workflow_params.existing_directory("workflow_directory") / "replicas.yml"
+    )
+    assert replica_catalog.exists()
+
+    transformations_catalog = (
+        workflow_params.existing_directory("workflow_directory") / "transformations.yml"
+    )
+    assert transformations_catalog.exists()
+
+    properties_file = (
+        workflow_params.existing_directory("workflow_directory") / "pegasus.properties"
+    )
+    assert properties_file.exists()
+
     submit_script_process = subprocess.Popen(
         ["sh", str(submit_script_one)],
         stdout=subprocess.PIPE,
@@ -159,6 +177,7 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "gaia",
+            "home_dir": str(tmp_path),
         }
     )
     slurm_params = Parameters.from_mapping(
@@ -206,8 +225,25 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
         resource_request=resources,
     )
 
-    replica_catalog = workflow_params.existing_directory("workflow_directory") / "rc.dat"
+    workflow_builder.write_dax_to_dir()
+
+    site_catalog = workflow_params.existing_directory("workflow_directory") / "sites.yml"
+    assert site_catalog.exists()
+
+    replica_catalog = (
+        workflow_params.existing_directory("workflow_directory") / "replicas.yml"
+    )
     assert replica_catalog.exists()
+
+    transformations_catalog = (
+        workflow_params.existing_directory("workflow_directory") / "transformations.yml"
+    )
+    assert transformations_catalog.exists()
+
+    properties_file = (
+        workflow_params.existing_directory("workflow_directory") / "pegasus.properties"
+    )
+    assert properties_file.exists()
 
     # Make sure the Replica Catalog is not empty
     assert replica_catalog.stat().st_size > 0
@@ -224,6 +260,7 @@ def test_clearing_ckpts(monkeypatch, tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "scavenge",
+            "home_dir": str(tmp_path),
         }
     )
 
@@ -261,6 +298,7 @@ def test_not_clearing_ckpts(monkeypatch, tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "scavenge",
+            "home_dir": str(tmp_path),
         }
     )
 
@@ -287,61 +325,6 @@ def test_not_clearing_ckpts(monkeypatch, tmp_path):
     assert checkpointed_multiply_file.exists()
 
 
-class _JobWithNameHasCategoryHandler(saxhandler.ContentHandler):
-    """
-    SAX handler which checks whether a DAX file
-    specifies a job with a certain name and category
-    (specified respectively by `target_job_name` and `category`).
-    """
-
-    def __init__(self, target_job_name, category):
-        super().__init__()
-        self.target_job_name = target_job_name
-        self.category = category
-        self._in_target_job = False
-        self._in_target_job_category = False
-        self._job_category_content = []
-        self._job_has_category = False
-
-    def _element_is_target_job(self, name, attrs) -> bool:
-        return name == "job" and attrs.get("name") == self.target_job_name
-
-    @staticmethod
-    def _element_sets_job_category(name, attrs) -> bool:
-        return (
-            name == "profile"
-            and attrs.get("namespace") == "dagman"
-            and attrs.get("key") == "category"
-        )
-
-    def startElement(self, name, attrs):
-        if self._element_is_target_job(name, attrs):
-            self._in_target_job = True
-        elif self._in_target_job and self._element_sets_job_category(name, attrs):
-            self._in_target_job_category = True
-
-    def characters(self, content):
-        if self._in_target_job_category:
-            self._job_category_content.append(content)
-
-    def endElement(self, name):
-        # Assume jobs are never nested
-        if name == "job":
-            self._in_target_job = False
-        # If we just finished one of the target job's category profile tags, check if it specifies
-        # the expected category.
-        elif name == "profile" and self._in_target_job_category:
-            category = "".join(self._job_category_content).strip()
-            # category will always be a string, need to convert any object or non-str to compare
-            if category == str(self.category):
-                self._job_has_category = True
-            self._job_category_content = []
-            self._in_target_job_category = False
-
-    def job_had_target_category(self) -> bool:
-        return self._job_has_category
-
-
 def _job_in_dax_has_category(dax_file, target_job_locator, category):
     """
     Return whether the given DAX file has a job
@@ -349,14 +332,18 @@ def _job_in_dax_has_category(dax_file, target_job_locator, category):
     which has the category `category`.
     """
     target_job_name = str(target_job_locator).replace("/", "_")
-    handler = _JobWithNameHasCategoryHandler(
-        target_job_name=target_job_name, category=category
-    )
 
     with dax_file.open("r") as f:
-        sax.parse(f, handler=handler)
+        data = load(f, Loader=SafeLoader)
 
-    return handler.job_had_target_category()
+    for item in data["jobs"]:
+        if item["name"] == target_job_name:
+            if "dagman" in item["profiles"].keys():
+                if "CATEGORY" in item["profiles"]["dagman"].keys():
+                    if item["profiles"]["dagman"]["CATEGORY"] == category:
+                        return True
+
+    return False
 
 
 def test_dax_with_categories(tmp_path):
@@ -369,6 +356,7 @@ def test_dax_with_categories(tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "gaia",
+            "home_dir": str(tmp_path),
         }
     )
     workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
@@ -409,6 +397,7 @@ def test_dax_with_saga_categories(tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "gaia",
+            "home_dir": str(tmp_path),
         }
     )
     multiply_partition = "gaia"
@@ -477,6 +466,7 @@ def test_category_max_jobs(tmp_path):
             "site": "saga",
             "namespace": "test",
             "partition": "gaia",
+            "home_dir": str(tmp_path),
         }
     )
     multiply_slurm_params = Parameters.from_mapping(
@@ -531,14 +521,31 @@ def test_category_max_jobs(tmp_path):
     workflow_builder.limit_jobs_for_category("gaia", 1)
     workflow_builder.write_dax_to_dir()
 
-    config = workflow_params.existing_directory("workflow_directory") / "pegasus.conf"
-    assert config.exists()
+    site_catalog = workflow_params.existing_directory("workflow_directory") / "sites.yml"
+    assert site_catalog.exists()
+
+    replica_catalog = (
+        workflow_params.existing_directory("workflow_directory") / "replicas.yml"
+    )
+    assert replica_catalog.exists()
+
+    transformations_catalog = (
+        workflow_params.existing_directory("workflow_directory") / "transformations.yml"
+    )
+    assert transformations_catalog.exists()
+
+    properties_file = (
+        workflow_params.existing_directory("workflow_directory") / "pegasus.properties"
+    )
+    assert properties_file.exists()
 
     # Make sure the config contains the appropriate maxjobs lines and no inappropriate maxjobs lines
-    with config.open("r") as f:
+    with properties_file.open("r") as f:
         lines = f.readlines()
-    assert any("dagman.gaia.maxjobs=1" in line for line in lines)
-    assert all("dagman.ephemeral.maxjobs=" not in line for line in lines)
+    for line in lines:
+        print(line)
+    assert any("dagman.gaia.maxjobs = 1" in line for line in lines)
+    assert all("dagman.ephemeral.maxjobs =" not in line for line in lines)
 
 
 def test_dax_test_exclude_nodes_on_saga(tmp_path):
@@ -556,6 +563,7 @@ def test_dax_test_exclude_nodes_on_saga(tmp_path):
             "namespace": "test",
             "partition": "gaia",
             "exclude_list": sample_exclude,
+            "home_dir": str(tmp_path),
         }
     )
     slurm_params = Parameters.from_mapping(
@@ -600,20 +608,23 @@ def test_dax_test_exclude_nodes_on_saga(tmp_path):
     )
 
     dax_file = workflow_builder.write_dax_to_dir(tmp_path)
-    tree = ET.parse(dax_file.absolute())
-    root = tree.getroot()
+    with dax_file.open("r") as dax:
+        dax_yaml = load(dax, Loader=SafeLoader)
+    root = dax_yaml["jobs"]
 
     for item in root:
-        if item.tag.endswith("job"):
-            for item2 in item.getchildren():
-                if item2.tag.endswith("profile"):
-                    if item2.attrib["namespace"] == "pegasus":
-                        if item.attrib["name"] == "jobs_multiply":
-                            assert f"--exclude={sample_exclude}" in item2.text
-                        elif item.attrib["name"] == "jobs_sort":
-                            assert f"--exclude=" in item2.text
-                            assert f"--nodelist={sample_include}" in item2.text
-                        else:
-                            assert False
-
-    return tree
+        if item["type"] == "job":
+            if "pegasus" in item["profiles"]:
+                if item["name"] == "jobs_multiply":
+                    assert (
+                        f"--exclude={sample_exclude}"
+                        in item["profiles"]["pegasus"]["glite.arguments"]
+                    )
+                elif item["name"] == "jobs_sort":
+                    assert f"--exclude=" in item["profiles"]["pegasus"]["glite.arguments"]
+                    assert (
+                        f"--nodelist={sample_include}"
+                        in item["profiles"]["pegasus"]["glite.arguments"]
+                    )
+                else:
+                    assert False

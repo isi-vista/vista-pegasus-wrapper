@@ -1,16 +1,25 @@
 from pathlib import Path
-from typing import Optional
 
-from Pegasus.api import Arch
-from Pegasus.DAX3 import OS, PFN, Executable, File
+from vistautils.parameters import Parameters
+
+from Pegasus.api import (
+    OS,
+    Arch,
+    Directory,
+    FileServer,
+    Operation,
+    Properties,
+    Site,
+    SiteCatalog,
+)
 
 SUBMIT_SCRIPT = """#!/bin/bash
 
 set -e
 
 pegasus-plan \\
-    --conf pegasus.conf \\
-    --dax {dax_file} \\
+    {dax_file} \\
+    --conf pegasus.properties \\
     --dir {workflow_directory} \\
     --cleanup leaf \\
     --force \\
@@ -20,89 +29,68 @@ pegasus-plan \\
 """
 
 
-def path_to_pegasus_file(
-    path: Path,
-    *,
-    site: str = "local",
-    name: Optional[str] = None,
-    is_raw_input: bool = False
-) -> File:
-    """
-    Given a *path* object return a pegasus `File` for usage in a workflow
-    If the resource is not on a local machine provide the *site* string.
-    Files can be used for either an input or output of a Job.
-
-    Args:
-        path: path to the file
-        site: site to be used, default is local. Should be set to saga if running
-        on cluster.
-        name: name given to the file
-        is_raw_input: indicates that the file doesn't come from the output of another
-        job in the workflow, so can be safely added to the Pegasus DAX
-    Returns:
-        Pegasus File at the given path
-
-    """
-    rtnr = File(name if name else str(path.absolute()).replace("/", "-"))
-    if is_raw_input:
-        rtnr.addPFN(path_to_pfn(path, site=site))
-    return rtnr
-
-
-def path_to_pfn(path: Path, *, site: str = "local") -> PFN:
-    return PFN(str(path.absolute()), site=site)
-
-
-def script_to_pegasus_executable(
-    path: Path,
-    name: Optional[str] = None,
-    *,
-    site: str = "local",
-    namespace: Optional[str] = None,
-    version: Optional[str] = None,
-    arch: Optional[Arch] = None,
-    os: Optional[OS] = None,
-    osrelease: Optional[str] = None,
-    osversion: Optional[str] = None,
-    glibc: Optional[str] = None,
-    installed: Optional[bool] = None,
-    container: Optional[str] = None
-) -> Executable:
-    """
-    Turns a script path into a pegasus Executable
-
-    Arguments:
-        *name*: Logical name of executable
-        *namespace*: Executable namespace
-        *version*: Executable version
-        *arch*: Architecture that this exe was compiled for
-        *os*: Name of os that this exe was compiled for
-        *osrelease*: Release of os that this exe was compiled for
-        *osversion*: Version of os that this exe was compiled for
-        *glibc*: Version of glibc this exe was compiled against
-        *installed*: Is the executable installed (true), or stageable (false)
-        *container*: Optional attribute to specify the container to use
-    """
-
-    rtrnr = Executable(
-        path.stem + path.suffix if name is None else name,
-        namespace=namespace,
-        version=version,
-        arch=arch,
-        os=os,
-        osrelease=osrelease,
-        osversion=osversion,
-        glibc=glibc,
-        installed=installed,
-        container=container,
-    )
-    rtrnr.addPFN(path_to_pfn(path, site=site))
-    return rtrnr
-
-
 def build_submit_script(path: Path, dax_file: str, workflow_directory: Path) -> None:
     path.write_text(
         SUBMIT_SCRIPT.format(workflow_directory=workflow_directory, dax_file=dax_file)
     )
     # Designate the submit script as executable
     path.chmod(0o777)
+
+
+def add_local_nas_to_sites(
+    sites_catalog: SiteCatalog, params: Parameters = Parameters.empty()
+) -> None:
+    home = params.string("home_dir", default=str(Path.home().absolute()))
+    shared_scratch_dir = params.string(
+        "local_shared_scratch", default=f"{home}/workflows/scratch"
+    )
+    local_storage_dir = params.string("local_storage", default=f"{home}/workflows/output")
+
+    sites_catalog.add_sites(
+        Site("local", arch=Arch.X86_64, os_type=OS.LINUX).add_directories(
+            Directory(Directory.SHARED_SCRATCH, shared_scratch_dir).add_file_servers(
+                FileServer("file://" + shared_scratch_dir, Operation.ALL)
+            ),
+            Directory(Directory.LOCAL_STORAGE, local_storage_dir).add_file_servers(
+                FileServer("file://" + local_storage_dir, Operation.ALL)
+            ),
+        )
+    )
+
+
+def add_saga_cluster_to_sites(
+    sites_catalog: SiteCatalog, params: Parameters = Parameters.empty()
+) -> None:
+    home = params.string("home_dir", default=str(Path.home().absolute()))
+
+    shared_scratch_dir = params.string(
+        "saga_shared_scratch", default=f"{home}/workflows/shared-scratch"
+    )
+
+    saga = Site("saga", arch=Arch.X86_64, os_type=OS.LINUX)
+    saga.add_directories(
+        Directory(Directory.SHARED_SCRATCH, shared_scratch_dir).add_file_servers(
+            FileServer("file://" + shared_scratch_dir, Operation.ALL)
+        )
+    )
+
+    saga.add_env(
+        key="PEGASUS_HOME", value="/nas/gaia/shared/cluster/pegasus5/pegasus-5.0.0"
+    )
+
+    # Profiles
+    saga.add_pegasus_profile(style="glite", auxillary_local=True)
+    saga.add_condor_profile(grid_resource="batch slurm")
+
+    sites_catalog.add_sites(saga)
+
+
+def configure_saga_properities(  # pylint: disable=unused-argument
+    properties: Properties, params: Parameters = Parameters.empty()
+) -> None:
+    properties["pegasus.data.configuration"] = "sharedfs"
+    properties["pegasus.metrics.app"] = "SAGA"
+    properties["dagman.retry"] = "0"
+
+    # TODO: Implement a method to add parameters to this properties file
+    # See: https://github.com/isi-vista/vista-pegasus-wrapper/issues/72
