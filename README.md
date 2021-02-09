@@ -56,6 +56,10 @@ Use run_on_single_node parameter when you initialize a workflow (or a Slurm reso
 * Note you cannot use this option with the **exclude_list** option.
 * Note you cannot specify more than one node using this option.
 
+## How can I limit the number of active jobs at one time?
+Pegasus is powered by HTCondor which allows for limiting the number of active jobs in a given category. By default, jobs requested for the SAGA cluster are automatically categorized according to their partition. Custom category names can be provided during job creation.
+To limit the number of active jobs in a category call `limit_jobs_for_category(category: str, max_jobs: int)` where `category` is the string of the category to limit and the `max_jobs` is the maximum number of jobs to permit. We recommend providing a parameter setting to configure the `max_jobs` value.
+
 # Common Errors
 
 ## Mismatching partition selection and max walltime
