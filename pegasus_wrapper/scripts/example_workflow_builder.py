@@ -81,6 +81,9 @@ def example_workflow(params: Parameters):
         # resource_request=SlurmResourceRequest.from_parameters(slurm_params),
     )
 
+    # If you want to limit the number of active jobs in a category use the following
+    # limit_jobs_for_category("scavenge", 1)
+
     # Generate the Pegasus DAX file & a Submit Script
     write_workflow_description(tmp_path)
 
