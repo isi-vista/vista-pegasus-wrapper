@@ -62,6 +62,7 @@ def run_python_on_parameters(
     resource_request: Optional[ResourceRequest] = None,
     override_conda_config: Optional[CondaConfiguration] = None,
     category: Optional[str] = None,
+    container= None,
     use_pypy: bool = False,
 ) -> DependencyNode:
     """
@@ -83,6 +84,7 @@ def run_python_on_parameters(
         override_conda_config=override_conda_config,
         category=category,
         use_pypy=use_pypy,
+        container=container,
     )
 
 
