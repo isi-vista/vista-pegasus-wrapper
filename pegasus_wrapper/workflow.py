@@ -296,7 +296,7 @@ class WorkflowBuilder:
         Returns the created `Container`
         """
 
-        if container_type not in _STR_TO_CONTAINER_TYPE.keys():
+        if container_type not in _STR_TO_CONTAINER_TYPE:
             raise ValueError(
                 f"Container Type = {container_type} is not a valid container type. Valid options are {[f'{key}, ' for key in _STR_TO_CONTAINER_TYPE.keys()]}"
             )
