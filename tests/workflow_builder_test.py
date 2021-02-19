@@ -1,8 +1,10 @@
 import subprocess
 from random import Random
 
+import pytest
 from immutablecollections import immutableset
 from vistautils.parameters import Parameters
+from yaml import SafeLoader, load
 
 from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator, _parse_parts
@@ -11,9 +13,6 @@ from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.scripts.multiply_by_x import main as multiply_by_x_main
 from pegasus_wrapper.scripts.sort_nums_in_file import main as sort_nums_main
 from pegasus_wrapper.workflow import WorkflowBuilder
-
-import pytest
-from yaml import SafeLoader, load
 
 
 def test_simple_dax(tmp_path):
@@ -621,7 +620,7 @@ def test_dax_test_exclude_nodes_on_saga(tmp_path):
                         in item["profiles"]["pegasus"]["glite.arguments"]
                     )
                 elif item["name"] == "jobs_sort":
-                    assert f"--exclude=" in item["profiles"]["pegasus"]["glite.arguments"]
+                    assert "--exclude=" in item["profiles"]["pegasus"]["glite.arguments"]
                     assert (
                         f"--nodelist={sample_include}"
                         in item["profiles"]["pegasus"]["glite.arguments"]

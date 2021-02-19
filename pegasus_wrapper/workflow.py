@@ -11,8 +11,21 @@ from typing import Any, Dict, List, Mapping, Optional, Set, Union
 
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
-
 from immutablecollections import immutabledict
+from Pegasus.api import (
+    OS,
+    Arch,
+    Container,
+    File,
+    Job,
+    Properties,
+    ReplicaCatalog,
+    SiteCatalog,
+    Transformation,
+    TransformationCatalog,
+    Workflow,
+)
+from saga_tools.conda import CondaConfiguration
 from vistautils.class_utils import fully_qualified_name
 from vistautils.io_utils import CharSink
 from vistautils.parameters import Parameters, YAMLParametersWriter
@@ -28,21 +41,6 @@ from pegasus_wrapper.pegasus_utils import (
 )
 from pegasus_wrapper.resource_request import ResourceRequest
 from pegasus_wrapper.scripts import nuke_checkpoints
-
-from Pegasus.api import (
-    OS,
-    Arch,
-    Container,
-    File,
-    Job,
-    Properties,
-    ReplicaCatalog,
-    SiteCatalog,
-    Transformation,
-    TransformationCatalog,
-    Workflow,
-)
-from saga_tools.conda import CondaConfiguration
 
 _STR_TO_CONTAINER_TYPE = immutabledict(
     {
@@ -345,6 +343,7 @@ class WorkflowBuilder:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             encoding="utf-8",
+            check=True,
         )
         self._replica_catalog.write()
 

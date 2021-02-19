@@ -7,14 +7,12 @@ from typing import Generic, Iterable, Optional, Sequence, TypeVar
 
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
-
 from immutablecollections import ImmutableSet, immutableset
-
-from pegasus_wrapper.locator import Locator
-
 from more_itertools import collapse
 from Pegasus.api import File, Job
 from typing_extensions import Protocol
+
+from pegasus_wrapper.locator import Locator
 
 
 @attrs(slots=True, eq=False)
