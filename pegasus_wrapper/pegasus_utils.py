@@ -1,7 +1,5 @@
 from pathlib import Path
 
-from vistautils.parameters import Parameters
-
 from Pegasus.api import (
     OS,
     Arch,
@@ -12,6 +10,7 @@ from Pegasus.api import (
     Site,
     SiteCatalog,
 )
+from vistautils.parameters import Parameters
 
 SUBMIT_SCRIPT = """#!/bin/bash
 

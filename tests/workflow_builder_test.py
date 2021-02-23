@@ -621,10 +621,112 @@ def test_dax_test_exclude_nodes_on_saga(tmp_path):
                         in item["profiles"]["pegasus"]["glite.arguments"]
                     )
                 elif item["name"] == "jobs_sort":
-                    assert f"--exclude=" in item["profiles"]["pegasus"]["glite.arguments"]
+                    assert "--exclude=" in item["profiles"]["pegasus"]["glite.arguments"]
                     assert (
                         f"--nodelist={sample_include}"
                         in item["profiles"]["pegasus"]["glite.arguments"]
                     )
                 else:
                     assert False
+
+
+def test_dax_with_job_in_container(tmp_path):
+    workflow_params = Parameters.from_mapping(
+        {
+            "workflow_name": "Test",
+            "workflow_created": "Testing",
+            "workflow_log_dir": str(tmp_path / "log"),
+            "workflow_directory": str(tmp_path / "working"),
+            "site": "saga",
+            "namespace": "test",
+            "partition": "gaia",
+            "experiment_name": "fred",
+            "home_dir": str(tmp_path),
+        }
+    )
+
+    slurm_params = Parameters.from_mapping(
+        {"partition": "gaia", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
+    )
+
+    multiply_input_file = tmp_path / "raw_nums.txt"
+    random = Random()
+    random.seed(0)
+    nums = immutableset(int(random.random() * 100) for _ in range(25))
+    multiply_output_file = tmp_path / "multiplied_nums.txt"
+    sorted_output_file = tmp_path / "sorted_nums.txt"
+
+    with multiply_input_file.open("w") as mult_file:
+        mult_file.writelines(f"{num}\n" for num in nums)
+
+    multiply_params = Parameters.from_mapping(
+        {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
+    )
+    sort_params = Parameters.from_mapping(
+        {"input_file": multiply_output_file, "output_file": sorted_output_file}
+    )
+
+    resources = SlurmResourceRequest.from_parameters(slurm_params)
+    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+
+    # Add Container
+    example_docker = workflow_builder.add_container(
+        "example_container", "docker", tmp_path / "docker.img"
+    )
+
+    with pytest.raises(ValueError):
+        _ = workflow_builder.add_container(
+            "fake_container", "invalid", tmp_path / "invalid_docker.img"
+        )
+
+    multiply_job_name = Locator(_parse_parts("jobs/multiply"))
+
+    multiply_artifact = ValueArtifact(
+        multiply_output_file,
+        depends_on=workflow_builder.run_python_on_parameters(
+            multiply_job_name,
+            multiply_by_x_main,
+            multiply_params,
+            depends_on=[],
+            container=example_docker,
+        ),
+        locator=Locator("multiply"),
+    )
+    multiple_dir = workflow_builder.directory_for(multiply_job_name)
+    assert (multiple_dir / "___run.sh").exists()
+    assert (multiple_dir / "____params.params").exists()
+
+    sort_job_name = Locator(_parse_parts("jobs/sort"))
+    sort_dir = workflow_builder.directory_for(sort_job_name)
+    workflow_builder.run_python_on_parameters(
+        sort_job_name,
+        sort_nums_main,
+        sort_params,
+        depends_on=[multiply_artifact],
+        resource_request=resources,
+        container=example_docker,
+    )
+    assert (sort_dir / "___run.sh").exists()
+    assert (sort_dir / "____params.params").exists()
+
+    dax_file_one = workflow_builder.write_dax_to_dir()
+
+    assert dax_file_one.exists()
+
+    site_catalog = workflow_params.existing_directory("workflow_directory") / "sites.yml"
+    assert site_catalog.exists()
+
+    replica_catalog = (
+        workflow_params.existing_directory("workflow_directory") / "replicas.yml"
+    )
+    assert replica_catalog.exists()
+
+    transformations_catalog = (
+        workflow_params.existing_directory("workflow_directory") / "transformations.yml"
+    )
+    assert transformations_catalog.exists()
+
+    properties_file = (
+        workflow_params.existing_directory("workflow_directory") / "pegasus.properties"
+    )
+    assert properties_file.exists()

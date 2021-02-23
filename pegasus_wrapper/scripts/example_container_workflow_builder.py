@@ -5,16 +5,29 @@ from vistautils.parameters import Parameters
 from vistautils.parameters_only_entrypoint import parameters_only_entry_point
 
 from pegasus_wrapper import (
+    add_container,
     initialize_vista_pegasus_wrapper,
     run_python_on_parameters,
     write_workflow_description,
 )
 from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator
+from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.scripts import multiply_by_x, sort_nums_in_file
 
+# NOTES: We can confirm that job is running in container by checking:
+# python -V
+# /nas/gaia/users/napiersk/archives/docker/python-3-6-3.tar
+# <profile namespace="pegasus" key="glite.arguments">--nodelist saga31</profile>
+# pursuit_resource_request:
+#    exclude_list: "saga01,saga02,saga03,saga04,saga05,saga06,saga07,saga08,saga10, /
+# saga11,saga12,saga13,saga14,saga15,saga16,saga17,saga18,saga19,saga20, /
+# saga21,saga22,saga23,saga24,saga25,saga26,gaia01,gaia02"
+#    partition: ephemeral
+# SlurmResourceRequest.from_parameters({"run_on_single_node": "saga31"})
 
-def example_workflow(params: Parameters):
+
+def example_workflow(params: Parameters):  # pragma: no cover
     """
     An example script to generate a workflow for submission to Pegasus.
     """
@@ -34,6 +47,10 @@ def example_workflow(params: Parameters):
             "home_dir": str(tmp_path),
             "partition": "scavenge",
         }
+    )
+
+    saga31_request = SlurmResourceRequest.from_parameters(
+        Parameters.from_mapping({"run_on_single_node": "saga31", "partition": "gaia"})
     )
 
     workflow_params = workflow_params.unify(params)
@@ -57,6 +74,13 @@ def example_workflow(params: Parameters):
 
     initialize_vista_pegasus_wrapper(workflow_params)
 
+    add_container(
+        "python3.6",
+        "docker",
+        "/nas/gaia/users/napiersk/archives/docker/python-3-6-3.tar",
+        image_site="saga",
+    )
+
     multiply_artifact = ValueArtifact(
         multiply_output_file,
         depends_on=run_python_on_parameters(
@@ -69,6 +93,8 @@ def example_workflow(params: Parameters):
                 "logfile": str(tmp_path / "multiply_log.txt"),
             },
             depends_on=[],
+            container="python3.6",
+            resource_request=saga31_request,
         ),
         locator=Locator("multiply"),
     )
@@ -78,12 +104,11 @@ def example_workflow(params: Parameters):
         sort_nums_in_file,
         {"input_file": multiply_output_file, "output_file": sorted_output_file},
         depends_on=[multiply_artifact],
+        container="python3.6",
+        resource_request=saga31_request
         # if you want to use a different resource for some task, you can do this way
         # resource_request=SlurmResourceRequest.from_parameters(slurm_params),
     )
-
-    # If you want to limit the number of active jobs in a category use the following
-    # limit_jobs_for_category("scavenge", 1)
 
     # Generate the Pegasus DAX file & a Submit Script
     write_workflow_description(tmp_path)

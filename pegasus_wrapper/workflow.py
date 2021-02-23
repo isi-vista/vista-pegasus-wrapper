@@ -7,11 +7,25 @@ and should instead use the methods in the root of the package.
 import logging
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, Optional, Set, Union
+from typing import Any, Dict, List, Mapping, Optional, Set, Union
 
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
-
+from immutablecollections import immutabledict
+from Pegasus.api import (
+    OS,
+    Arch,
+    Container,
+    File,
+    Job,
+    Properties,
+    ReplicaCatalog,
+    SiteCatalog,
+    Transformation,
+    TransformationCatalog,
+    Workflow,
+)
+from saga_tools.conda import CondaConfiguration
 from vistautils.class_utils import fully_qualified_name
 from vistautils.io_utils import CharSink
 from vistautils.parameters import Parameters, YAMLParametersWriter
@@ -28,19 +42,13 @@ from pegasus_wrapper.pegasus_utils import (
 from pegasus_wrapper.resource_request import ResourceRequest
 from pegasus_wrapper.scripts import nuke_checkpoints
 
-from Pegasus.api import (
-    OS,
-    Arch,
-    File,
-    Job,
-    Properties,
-    ReplicaCatalog,
-    SiteCatalog,
-    Transformation,
-    TransformationCatalog,
-    Workflow,
+_STR_TO_CONTAINER_TYPE = immutabledict(
+    {
+        "docker": Container.DOCKER,
+        "singularity": Container.SINGULARITY,
+        "shifter": Container.SHIFTER,
+    }
 )
-from saga_tools.conda import CondaConfiguration
 
 
 @attrs(frozen=True, slots=True)
@@ -169,6 +177,7 @@ class WorkflowBuilder:
         override_conda_config: Optional[CondaConfiguration] = None,
         category: Optional[str] = None,
         use_pypy: bool = False,
+        container: Optional[Container] = None,
     ) -> DependencyNode:
         """
         Schedule a job to run the given *python_module* on the given *parameters*.
@@ -227,6 +236,7 @@ class WorkflowBuilder:
             bypass_staging=False,
             arch=Arch.X86_64,
             os_type=OS.LINUX,
+            container=container,
         )
 
         self._transformation_catalog.add_transformations(script_executable)
@@ -265,6 +275,47 @@ class WorkflowBuilder:
         logging.info("Scheduled Python job %s", job_name)
         return dependency_node
 
+    def add_container(
+        self,
+        container_name: str,
+        container_type: str,
+        image: Union[str, Path],
+        *,
+        arguments: Optional[str] = None,
+        mounts: Optional[List[str]] = None,
+        image_site: Optional[str] = None,
+        checksum: Optional[Mapping[str, str]] = None,
+        metadata: Optional[Mapping[str, Union[float, int, str]]] = None,
+        bypass_staging: bool = False,
+    ) -> Container:
+        """
+        Add a container to the transformation catalog, to be used on a Job request
+
+        `container_type` should be 'docker', 'singularity' or 'shifter'.
+
+        Returns the created `Container`
+        """
+
+        if container_type not in _STR_TO_CONTAINER_TYPE:
+            raise ValueError(
+                f"Container Type = {container_type} is not a valid container type. Valid options are {[f'{key}, ' for key, v in _STR_TO_CONTAINER_TYPE.items()]}"
+            )
+
+        container = Container(
+            container_name,
+            container_type=_STR_TO_CONTAINER_TYPE[container_type],
+            image=str(image.absolute()) if isinstance(image, Path) else image,
+            arguments=arguments,
+            mounts=mounts,
+            image_site=image_site,
+            checksum=immutabledict(checksum) if checksum else None,
+            metadata=immutabledict(metadata) if metadata else None,
+            bypass_staging=bypass_staging,
+        )
+
+        self._transformation_catalog.add_containers(container)
+        return container
+
     def set_resource_request(self, resource_request: ResourceRequest):
         if resource_request is not None:
             resource_request = self.default_resource_request.unify(resource_request)
@@ -292,6 +343,7 @@ class WorkflowBuilder:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             encoding="utf-8",
+            check=True,
         )
         self._replica_catalog.write()
 

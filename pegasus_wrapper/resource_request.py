@@ -4,14 +4,12 @@ from typing import Optional
 
 from attr import attrib, attrs
 from attr.validators import in_, instance_of, optional
-
-from vistautils.memory_amount import MemoryAmount
-from vistautils.parameters import Parameters
-from vistautils.range import Range
-
 from Pegasus.api import Job
 from saga_tools.slurm import to_slurm_memory_string
 from typing_extensions import Protocol
+from vistautils.memory_amount import MemoryAmount
+from vistautils.parameters import Parameters
+from vistautils.range import Range
 
 SCAVENGE = "scavenge"
 EPHEMERAL = "ephemeral"
@@ -36,7 +34,7 @@ class Partition:
 
     @staticmethod
     def from_str(name: str):
-        _partition_to_max_walltime = {"ephemeral": 720, "scavenge": 120}
+        _partition_to_max_walltime = {"ephemeral": 720, "scavenge": 120, "gaia": 1440}
 
         return Partition(
             name=name,

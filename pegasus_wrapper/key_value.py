@@ -3,8 +3,8 @@ from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple
 
 from attr import attrib, attrs
 from attr.validators import instance_of
-
 from immutablecollections.converter_utils import _to_tuple
+from typing_extensions import Protocol
 from vistautils.parameters import Parameters
 from vistautils.scripts import downsample_key_value_store, join_key_value_stores
 from vistautils.scripts import split_key_value_store as split_entry_point
@@ -12,8 +12,6 @@ from vistautils.scripts import split_key_value_store as split_entry_point
 from pegasus_wrapper import directory_for, run_python_on_parameters
 from pegasus_wrapper.artifact import AbstractArtifact, Artifact, ValueArtifact
 from pegasus_wrapper.locator import Locator
-
-from typing_extensions import Protocol
 
 
 class KeyValueStore(Artifact, Protocol):
@@ -89,7 +87,7 @@ class _ComposedKeyValueTransform(KeyValueTransform):
 
 
 def compose_key_value_store_transforms(
-    transforms: Sequence[KeyValueTransform]
+    transforms: Sequence[KeyValueTransform],
 ) -> KeyValueTransform:
     return _ComposedKeyValueTransform(transforms)
 
