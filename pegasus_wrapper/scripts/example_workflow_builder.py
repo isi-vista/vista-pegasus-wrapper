@@ -1,3 +1,4 @@
+# pragma: no cover
 from random import Random
 
 from vistautils.parameters import Parameters
@@ -13,7 +14,7 @@ from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.scripts import multiply_by_x, sort_nums_in_file
 
 
-def example_workflow(params: Parameters):  # pragma: no cover
+def example_workflow(params: Parameters):
     """
     An example script to generate a workflow for submission to Pegasus.
     """

@@ -1,10 +1,8 @@
 import subprocess
 from random import Random
 
-import pytest
 from immutablecollections import immutableset
 from vistautils.parameters import Parameters
-from yaml import SafeLoader, load
 
 from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator, _parse_parts
@@ -13,6 +11,9 @@ from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.scripts.multiply_by_x import main as multiply_by_x_main
 from pegasus_wrapper.scripts.sort_nums_in_file import main as sort_nums_main
 from pegasus_wrapper.workflow import WorkflowBuilder
+
+import pytest
+from yaml import SafeLoader, load
 
 
 def test_simple_dax(tmp_path):
@@ -672,6 +673,11 @@ def test_dax_with_job_in_container(tmp_path):
     example_docker = workflow_builder.add_container(
         "example_container", "docker", tmp_path / "docker.img"
     )
+
+    with pytest.raises(ValueError):
+        _ = workflow_builder.add_container(
+            "fake_container", "invalid", tmp_path / "invalid_docker.img"
+        )
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
 

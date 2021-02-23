@@ -1,3 +1,4 @@
+# pragma: no cover
 from random import Random
 
 from vistautils.parameters import Parameters
