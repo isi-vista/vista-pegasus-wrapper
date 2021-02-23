@@ -1,0 +1,22 @@
+# .coveragerc to control coverage.py
+[report]
+show_missing = True
+# Regexes for lines to exclude from consideration
+exclude_lines =
+    # Have to re-enable the standard pragma
+    pragma: no cover
+
+    # Don't complain if tests don't hit defensive assertion code:
+    raise AssertionError
+    raise NotImplementedError
+
+    # Don't complain if non-runnable code isn't run:
+    if 0:
+    if False:
+# Files to omit
+omit =
+    # We don't want to write tests for our example scripts
+    # As the functions are already tested in our current tests
+    # And a true test for those examples is running the workflow
+    # on the cluster
+    pegasus_wrapper/scripts/*
