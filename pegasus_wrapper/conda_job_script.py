@@ -5,11 +5,13 @@ from typing import Optional, Union
 
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
-from saga_tools.conda import CondaConfiguration
-from saga_tools.spack import SpackConfiguration
+
 from vistautils.io_utils import CharSink
 from vistautils.parameters import Parameters, YAMLParametersWriter
 from vistautils.parameters_only_entrypoint import parameters_only_entry_point
+
+from saga_tools.conda import CondaConfiguration
+from saga_tools.spack import SpackConfiguration
 
 
 def main(params: Parameters):
