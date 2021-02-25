@@ -14,7 +14,7 @@ from saga_tools.conda import CondaConfiguration
 from saga_tools.spack import SpackConfiguration
 
 
-def main(params: Parameters):
+def main(params: Parameters):  # pragma: no cover
     conda_script_generator = CondaJobScriptGenerator.from_parameters(params)
     entry_point = params.string("entry_point")
     work_dir = params.optional_creatable_directory("working_directory") or Path(
@@ -88,14 +88,18 @@ class CondaJobScriptGenerator:
 
     def generate_shell_script(
         self,
-        entry_point_name: str,
-        param_file: Path,
         *,
+        entry_point_name: str = None,
+        param_file: Path = None,
+        python_path: Path = None,
+        cmd_args: str = None,
         working_directory: Path,
         stdout_file: Path,
         ckpt_path: Optional[Path] = None,
         override_conda_config: Optional[CondaConfiguration] = None,
         python: str = "python",
+        pre_job: str = "",
+        post_job: str = "",
     ) -> str:
         """
         Returns the content of a shell script to run the given Python entry point
@@ -106,26 +110,44 @@ class CondaJobScriptGenerator:
         for outputs which are time or resource intensive or can be shared across projects.
         Examples: Running BERT on all of Gigaword or Converting RDF triples to FlexNLP documents
         """
+        if entry_point_name and python_path:
+            raise RuntimeError(
+                f"Can not provide both a python path ({python_path}) and an entry point name ({entry_point_name}) to job shell script generation."
+            )
+        if param_file and cmd_args:
+            raise RuntimeError(
+                f"Can not provide both a parameters file and command line args.\n"
+                f"Param: {param_file}\n"
+                f"Cmds: {cmd_args}"
+            )
         if override_conda_config:
             conda_config = override_conda_config
         else:
             conda_config = self.conda_config
 
+        python_job = PYTHON_JOB.format(
+            path_or_entry_point=f"-m {entry_point_name}"
+            if entry_point_name
+            else python_path,
+            param_file_or_args=param_file if param_file else cmd_args,
+            python=python,
+            stdout_file=stdout_file,
+        )
+
         return CONDA_SCRIPT.format(
             conda_lines=conda_config.sbatch_lines() if conda_config else "",
             spack_lines=self.spack_config.sbatch_lines() if self.spack_config else "",
             working_directory=working_directory,
-            entry_point=entry_point_name,
-            param_file=param_file,
+            python_job=python_job,
             ckpt_line=f"touch {ckpt_path.absolute()}" if ckpt_path else "",
-            stdout_file=stdout_file,
-            python=python,
+            pre_job=pre_job,
+            post_job=post_job,
         )
 
     def write_shell_script_to(
         self,
-        entry_point_name: str,
-        parameters: Union[Path, Parameters],
+        entry_point_name: Union[str, Path],
+        parameters: Union[Path, Parameters, str],
         *,
         working_directory: Path,
         script_path: Path,
@@ -134,6 +156,9 @@ class CondaJobScriptGenerator:
         ckpt_path: Optional[Path] = None,
         override_conda_config: Optional[CondaConfiguration] = None,
         python: str = "python",
+        treat_params_as_cmd_args: bool = False,
+        pre_job: str = "",
+        post_job: str = "",
     ) -> None:
         if isinstance(parameters, Path):
             if params_path:
@@ -147,9 +172,15 @@ class CondaJobScriptGenerator:
                     "Params path must be specified when providing a parameters object"
                 )
             YAMLParametersWriter().write(parameters, CharSink.to_file(params_path))
+        elif isinstance(parameters, str):
+            if not treat_params_as_cmd_args:
+                raise RuntimeError(
+                    "Parameters can only be a str when the parameters are being treated as command line args"
+                )
         else:
             raise RuntimeError(
-                f"Parameters must be either Parameters or path to a param file, "
+                f"Parameters must be either Parameters, path to a param file, "
+                f"or a mapping if treat_params_as_cmd_args is True, "
                 f"but got {parameters}"
             )
 
@@ -158,13 +189,21 @@ class CondaJobScriptGenerator:
 
         script_path.write_text(
             self.generate_shell_script(
-                entry_point_name=entry_point_name,
-                param_file=params_path,
+                entry_point_name=entry_point_name
+                if isinstance(entry_point_name, str)
+                else None,
+                python_path=str(entry_point_name.absolute()).strip()
+                if isinstance(entry_point_name, Path)
+                else None,
+                param_file=params_path if not treat_params_as_cmd_args else None,
+                cmd_args=parameters.strip() if treat_params_as_cmd_args else None,
                 stdout_file=stdout_file,
                 working_directory=working_directory,
                 ckpt_path=ckpt_path,
                 override_conda_config=override_conda_config,
                 python=python,
+                pre_job=pre_job,
+                post_job=post_job,
             ),
             encoding="utf-8",
         )
@@ -188,11 +227,16 @@ fi
 {conda_lines}
 {spack_lines}
 cd {working_directory}
-echo `which python`
-echo {python} -m {entry_point} {param_file}
-{python} -m {entry_point} {param_file} 2>&1 | tee {stdout_file}
+{pre_job}
+{python_job}
+{post_job}
 {ckpt_line}
 """
 
-if __name__ == "__main__":
+PYTHON_JOB = """
+echo {python} {path_or_entry_point} {param_file_or_args}
+{python} {path_or_entry_point} {param_file_or_args} 2>&1 | tee {stdout_file}
+"""
+
+if __name__ == "__main__":  # pragma: no cover
     parameters_only_entry_point(main)

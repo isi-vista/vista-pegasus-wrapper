@@ -7,12 +7,12 @@ and should instead use the methods in the root of the package.
 import logging
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Set, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Union
 
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
 
-from immutablecollections import immutabledict
+from immutablecollections import immutabledict, ImmutableSet, immutableset
 from vistautils.class_utils import fully_qualified_name
 from vistautils.io_utils import CharSink
 from vistautils.parameters import Parameters, YAMLParametersWriter
@@ -28,6 +28,7 @@ from pegasus_wrapper.pegasus_utils import (
 )
 from pegasus_wrapper.resource_request import ResourceRequest
 from pegasus_wrapper.scripts import nuke_checkpoints
+from pegasus_wrapper.utils import _ensure_iterable
 
 from Pegasus.api import (
     OS,
@@ -105,6 +106,14 @@ class WorkflowBuilder:
     # opting for experiment_name over workflow_name bc of VISTA's use of
     # the same or similar workflow with multiple experiments
     _experiment_name: str = attrib(kw_only=True, default="")
+    # Track created files so that if we go to make a duplicate lfn
+    # We instead just return the one we already made
+    _lfn_to_file: Dict[str, File] = attrib(kw_only=True, factory=dict)
+    # Track created transformation so that if we go to make a duplicate
+    # we instead return the one we already made
+    _transformation_name_to_transformation: Dict[str, Transformation] = attrib(
+        kw_only=True, factory=dict
+    )
 
     @staticmethod
     def from_parameters(params: Parameters) -> "WorkflowBuilder":
@@ -158,15 +167,34 @@ class WorkflowBuilder:
         *,
         add_to_catalog: bool = True,
     ) -> File:
-        f = File(logical_file_name)
-        f.add_metadata(creator=self.created_by)
-        if add_to_catalog:
-            self._replica_catalog.add_replica(
-                site if site else self._default_site,
-                logical_file_name,
-                physical_file_path,
+        """
+        Create an get Pegasus File type object for a given logical file name to a physical path.
+        If the file already exists, return the file otherwise create a new one.
+        To just retrieve a previously created file see `get_file`
+        """
+        if logical_file_name not in self._lfn_to_file:
+            f = File(logical_file_name)
+            f.add_metadata(creator=self.created_by)
+            if add_to_catalog:
+                self._replica_catalog.add_replica(
+                    site if site else self._default_site,
+                    logical_file_name,
+                    str(physical_file_path),
+                )
+            self._lfn_to_file[logical_file_name] = f
+        return self._lfn_to_file[logical_file_name]
+
+    def get_file(self, logical_file_name: str) -> File:
+        """
+        Get a Pegasus File object for a given logical file,
+        if it doesn't already exist raise an error.
+        """
+        if logical_file_name not in self._lfn_to_file:
+            raise RuntimeError(
+                f"Asked to retrive file name {logical_file_name} but "
+                f"this file did not already exist."
             )
-        return f
+        return self._lfn_to_file[logical_file_name]
 
     def run_python_on_parameters(
         self,
@@ -180,6 +208,8 @@ class WorkflowBuilder:
         category: Optional[str] = None,
         use_pypy: bool = False,
         container: Optional[Container] = None,
+        pre_job_bash: str = "",
+        post_job_bash: str = "",
     ) -> DependencyNode:
         """
         Schedule a job to run the given *python_module* on the given *parameters*.
@@ -227,21 +257,38 @@ class WorkflowBuilder:
             ckpt_path=checkpoint_path,
             override_conda_config=override_conda_config,
             python="pypy3" if use_pypy else "python",
-        )
-        script_executable = Transformation(
-            self._job_name_for(job_name),
-            namespace=self._namespace,
-            version="4.0",
-            site=self._default_site,
-            pfn=script_path,
-            is_stageable=False,
-            bypass_staging=False,
-            arch=Arch.X86_64,
-            os_type=OS.LINUX,
-            container=container,
+            pre_job=pre_job_bash,
+            post_job=post_job_bash,
         )
 
-        self._transformation_catalog.add_transformations(script_executable)
+        if (
+            self._job_name_for(job_name)
+            not in self._transformation_name_to_transformation
+        ):
+            logging.info(
+                "Transformation %s recognized as new", self._job_name_for(job_name)
+            )
+            self._transformation_name_to_transformation[
+                self._job_name_for(job_name)
+            ] = Transformation(
+                self._job_name_for(job_name),
+                namespace=self._namespace,
+                version="4.0",
+                site=self._default_site,
+                pfn=script_path,
+                is_stageable=False,
+                bypass_staging=False,
+                arch=Arch.X86_64,
+                os_type=OS.LINUX,
+                container=container,
+            )
+            self._transformation_catalog.add_transformations(
+                self._transformation_name_to_transformation[self._job_name_for(job_name)]
+            )
+
+        script_executable = self._transformation_name_to_transformation[
+            self._job_name_for(job_name)
+        ]
 
         job = Job(script_executable)
         self._job_graph.add_jobs(job)
@@ -277,6 +324,155 @@ class WorkflowBuilder:
         logging.info("Scheduled Python job %s", job_name)
         return dependency_node
 
+    def run_python_on_args(
+        self,
+        job_name: Locator,
+        python_path: Path,
+        set_args: str,
+        *,
+        depends_on,
+        resource_request: Optional[ResourceRequest] = None,
+        override_conda_config: Optional[CondaConfiguration] = None,
+        category: Optional[str] = None,
+        use_pypy: bool = False,
+        stdout_path: Optional[Path] = None,
+        job_is_stageable: bool = False,
+        job_bypass_staging: bool = False,
+        set_pegasus_args: str = "",
+        output_files: Optional[Union[Path, str, Iterable[Union[Path, str]]]] = None,
+        pre_job_bash: str = "",
+        post_job_bash: str = "",
+        times_to_retry_job: int = 0,
+    ) -> DependencyNode:
+        """
+        Schedule a job to run the given *python_script* with the given *set_args*.
+
+        If this job requires other jobs to be executed first,
+        include them in *depends_on*.
+
+        This method returns a `DependencyNode` which can be used in *depends_on*
+        for future jobs.
+        """
+        job_dir = self.directory_for(job_name)
+        ckpt_name = job_name / "___ckpt"
+        checkpoint_path = job_dir / "___ckpt"
+        script_path = job_dir / "___run.sh"
+
+        depends_on = _canonicalize_depends_on(depends_on)
+
+        # If we've already scheduled this identical job,
+        # then don't schedule it again.
+        signature = (python_path, set_args)
+        if signature in self._signature_to_job:
+            logging.info("Job %s recognized as a duplicate", job_name)
+            return self._signature_to_job[signature]
+
+        if not stdout_path:
+            stdout_path = (job_dir / "___stdout.log").absolute()
+
+        self._conda_script_generator.write_shell_script_to(
+            entry_point_name=python_path,
+            parameters=set_args,
+            working_directory=job_dir,
+            script_path=script_path,
+            params_path=job_dir / "____params.params",
+            stdout_file=Path(stdout_path),
+            ckpt_path=checkpoint_path,
+            override_conda_config=override_conda_config,
+            python="pypy3" if use_pypy else "python",
+            treat_params_as_cmd_args=True,
+            pre_job=pre_job_bash,
+            post_job=post_job_bash,
+        )
+        if (
+            self._job_name_for(job_name)
+            not in self._transformation_name_to_transformation
+        ):
+            logging.info(
+                "Transformation %s recognized as new", self._job_name_for(job_name)
+            )
+            self._transformation_name_to_transformation[
+                self._job_name_for(job_name)
+            ] = Transformation(
+                self._job_name_for(job_name),
+                namespace=self._namespace,
+                version="4.0",
+                site=self._default_site,
+                pfn=str(script_path.absolute()),
+                is_stageable=job_is_stageable,
+                bypass_staging=job_bypass_staging,
+                arch=Arch.X86_64,
+                os_type=OS.LINUX,
+            )
+            self._transformation_catalog.add_transformations(
+                self._transformation_name_to_transformation[self._job_name_for(job_name)]
+            )
+
+        script_executable = self._transformation_name_to_transformation[
+            self._job_name_for(job_name)
+        ]
+
+        job = Job(script_executable)
+
+        set_pegasus_args = set_pegasus_args.split(" ")
+
+        args: List[Union[File, float, int, str]] = []
+        for tok in set_pegasus_args:
+            if tok in self._lfn_to_file:
+                args.append(self._lfn_to_file[tok])
+            else:
+                args.append(tok)
+
+        job.add_args(*args)
+
+        self._job_graph.add_jobs(job)
+        for parent_dependency in depends_on:
+            if parent_dependency.job:
+                self._job_graph.add_dependency(job, parents=[parent_dependency.job])
+            for out_file in parent_dependency.output_files:
+                job.add_inputs(out_file)
+
+        resource_request = self.set_resource_request(resource_request)
+
+        if category:
+            job.add_dagman_profile(category=category, retry=times_to_retry_job)
+
+        resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
+
+        # Handle Output Files
+        # This is currently only handled as the checkpoint file
+        # See: https://github.com/isi-vista/vista-pegasus-wrapper/issues/25
+        # If the checkpoint file already exists, we want to add it to the replica catalog
+        # so that we don't run the job corresponding to the checkpoint file again
+        checkpoint_pegasus_file = self.create_file(
+            f"{ckpt_name}", checkpoint_path, add_to_catalog=checkpoint_path.exists()
+        )
+
+        job.add_checkpoint(checkpoint_pegasus_file, stage_out=False)
+        job_outputs = []
+
+        if output_files:
+            for output_file in _ensure_iterable(output_files):
+                job_output_file = self.create_file(
+                    str(output_file) if isinstance(output_file, Path) else output_file,
+                    output_file,
+                    add_to_catalog=output_file.exists()
+                    if isinstance(output_file, Path)
+                    else False,
+                )
+                logging.debug("Setting %s as output file for job %s", output_file, job)
+                job.add_outputs(job_output_file)
+                job_outputs.append(output_file)
+
+        dependency_node = DependencyNode.from_job(
+            job, output_files=[checkpoint_pegasus_file].extend(job_outputs)
+        )
+        self._signature_to_job[signature] = dependency_node
+
+        logging.info("Scheduled Python w/ Args job %s", job_name)
+        return dependency_node
+
+    def set_resource_request(self, resource_request: ResourceRequest) -> ResourceRequest:
     def add_container(
         self,
         container_name: str,
