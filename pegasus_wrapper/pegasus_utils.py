@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from vistautils.parameters import Parameters
+
 from Pegasus.api import (
     OS,
     Arch,
@@ -10,7 +12,6 @@ from Pegasus.api import (
     Site,
     SiteCatalog,
 )
-from vistautils.parameters import Parameters
 
 SUBMIT_SCRIPT = """#!/bin/bash
 
@@ -78,7 +79,9 @@ def add_saga_cluster_to_sites(
     )
 
     # Profiles
-    saga.add_pegasus_profile(style="glite", auxillary_local=True)
+    saga.add_pegasus_profile(
+        style="glite", auxillary_local=True, data_configuration="sharedfs"
+    )
     saga.add_condor_profile(grid_resource="batch slurm")
 
     sites_catalog.add_sites(saga)

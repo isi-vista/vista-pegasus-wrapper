@@ -17,8 +17,6 @@ Terminology
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Union
 
-from Pegasus.api import Container
-from saga_tools.conda import CondaConfiguration
 from vistautils.parameters import Parameters
 
 from pegasus_wrapper.artifact import DependencyNode
@@ -26,6 +24,9 @@ from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.resource_request import ResourceRequest
 from pegasus_wrapper.version import version as __version__  # noqa
 from pegasus_wrapper.workflow import WorkflowBuilder
+
+from Pegasus.api import Container
+from saga_tools.conda import CondaConfiguration
 
 _SINGLETON_WORKFLOW_BUILDER: WorkflowBuilder = None  # type: ignore
 
