@@ -169,10 +169,6 @@ class SlurmResourceRequest(ResourceRequest):
             run_on_single_node=other.run_on_single_node or self.run_on_single_node,
         )
 
-    def convert_time_to_slurm_format(self, job_time_in_minutes: int) -> str:
-        hours, mins = divmod(job_time_in_minutes, 60)
-        return f"{hours}:{str(mins)+'0' if mins < 10 else mins}:00"
-
     def apply_to_job(self, job: Job, *, job_name: str) -> None:
         if not self.partition:
             raise RuntimeError("A partition to run on must be specified.")
@@ -208,7 +204,7 @@ class SlurmResourceRequest(ResourceRequest):
             slurm_resource_content += f" --qos={self.partition.name}"
 
         job.add_pegasus_profile(
-            runtime=self.job_time_in_minutes,
+            runtime=self.job_time_in_minutes * 60,
             queue=str(self.partition.name),
             project=None
             if self.partition.name in (EPHEMERAL, SCAVENGE)
