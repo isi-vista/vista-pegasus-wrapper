@@ -267,7 +267,7 @@ class WorkflowBuilder:
             f"{ckpt_name}", checkpoint_path, add_to_catalog=checkpoint_path.exists()
         )
 
-        job.add_outputs(checkpoint_pegasus_file, stage_out=False)
+        job.add_checkpoint(checkpoint_pegasus_file)
 
         dependency_node = DependencyNode.from_job(
             job, output_files=[checkpoint_pegasus_file]
