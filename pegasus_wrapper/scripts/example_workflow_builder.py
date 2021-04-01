@@ -6,12 +6,13 @@ from vistautils.parameters_only_entrypoint import parameters_only_entry_point
 
 from pegasus_wrapper import (
     initialize_vista_pegasus_wrapper,
+    run_python_on_args,
     run_python_on_parameters,
     write_workflow_description,
 )
 from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator
-from pegasus_wrapper.scripts import multiply_by_x, sort_nums_in_file
+from pegasus_wrapper.scripts import add_y, multiply_by_x, sort_nums_in_file
 
 
 def example_workflow(params: Parameters):
@@ -47,6 +48,7 @@ def example_workflow(params: Parameters):
 
     multiply_output_file = tmp_path / "multiplied_nums.txt"
     sorted_output_file = tmp_path / "sorted_nums.txt"
+    add_output_file = tmp_path / "add_nums.txt"
 
     # Base Job Locator
     job_locator = Locator(("jobs",))
@@ -73,13 +75,23 @@ def example_workflow(params: Parameters):
         locator=Locator("multiply"),
     )
 
-    run_python_on_parameters(
+    # You can also just track the dep node itself to pass to a future job if you don't
+    # need the value portion of an artifacy
+    mul_dep = run_python_on_parameters(
         job_locator / "sort",
         sort_nums_in_file,
         {"input_file": multiply_output_file, "output_file": sorted_output_file},
         depends_on=[multiply_artifact],
         # if you want to use a different resource for some task, you can do this way
         # resource_request=SlurmResourceRequest.from_parameters(slurm_params),
+    )
+
+    run_python_on_args(
+        job_locator / "add",
+        add_y,
+        set_args=f"{sorted_output_file} {add_output_file} --y 10",
+        depends_on=[mul_dep],
+        category="add",  # Can be used as a custom category for job limits
     )
 
     # If you want to limit the number of active jobs in a category use the following

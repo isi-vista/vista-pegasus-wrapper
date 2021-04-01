@@ -8,6 +8,7 @@ from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator, _parse_parts
 from pegasus_wrapper.pegasus_utils import build_submit_script
 from pegasus_wrapper.resource_request import SlurmResourceRequest
+from pegasus_wrapper.scripts.add_y import main as add_main
 from pegasus_wrapper.scripts.multiply_by_x import main as multiply_by_x_main
 from pegasus_wrapper.scripts.sort_nums_in_file import main as sort_nums_main
 from pegasus_wrapper.workflow import WorkflowBuilder
@@ -78,6 +79,7 @@ def test_dax_with_job_on_saga(tmp_path):
     nums = immutableset(int(random.random() * 100) for _ in range(25))
     multiply_output_file = tmp_path / "multiplied_nums.txt"
     sorted_output_file = tmp_path / "sorted_nums.txt"
+    add_output_file = tmp_path / "add_nums.txt"
     with multiply_input_file.open("w") as mult_file:
         mult_file.writelines(f"{num}\n" for num in nums)
     multiply_params = Parameters.from_mapping(
@@ -86,12 +88,12 @@ def test_dax_with_job_on_saga(tmp_path):
     sort_params = Parameters.from_mapping(
         {"input_file": multiply_output_file, "output_file": sorted_output_file}
     )
+    add_args = f"{sorted_output_file} {add_output_file} --y 10"
 
     resources = SlurmResourceRequest.from_parameters(slurm_params)
     workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
-
     multiply_artifact = ValueArtifact(
         multiply_output_file,
         depends_on=workflow_builder.run_python_on_parameters(
@@ -105,15 +107,23 @@ def test_dax_with_job_on_saga(tmp_path):
 
     sort_job_name = Locator(_parse_parts("jobs/sort"))
     sort_dir = workflow_builder.directory_for(sort_job_name)
-    workflow_builder.run_python_on_parameters(
+    sort_artifact = workflow_builder.run_python_on_parameters(
         sort_job_name,
         sort_nums_main,
         sort_params,
         depends_on=[multiply_artifact],
         resource_request=resources,
+        category="add",
     )
     assert (sort_dir / "___run.sh").exists()
     assert (sort_dir / "____params.params").exists()
+
+    add_job_name = Locator(_parse_parts("jobs/add"))
+    add_dir = workflow_builder.directory_for(add_job_name)
+    workflow_builder.run_python_on_args(
+        add_job_name, add_main, add_args, depends_on=[sort_artifact]
+    )
+    assert (add_dir / "___run.sh").exists()
 
     dax_file_one = workflow_builder.write_dax_to_dir(tmp_path)
     dax_file_two = workflow_builder.write_dax_to_dir()

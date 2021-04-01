@@ -12,7 +12,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Union
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
 
-from immutablecollections import immutabledict, ImmutableSet, immutableset
+from immutablecollections import immutabledict
 from vistautils.class_utils import fully_qualified_name
 from vistautils.io_utils import CharSink
 from vistautils.parameters import Parameters, YAMLParametersWriter
@@ -327,7 +327,7 @@ class WorkflowBuilder:
     def run_python_on_args(
         self,
         job_name: Locator,
-        python_path: Path,
+        python_module_or_path: Any,
         set_args: str,
         *,
         depends_on,
@@ -360,9 +360,14 @@ class WorkflowBuilder:
 
         depends_on = _canonicalize_depends_on(depends_on)
 
+        if isinstance(python_module_or_path, (str, Path)):
+            fully_qualified_module_name = python_module_or_path
+        else:
+            fully_qualified_module_name = fully_qualified_name(python_module_or_path)
+
         # If we've already scheduled this identical job,
         # then don't schedule it again.
-        signature = (python_path, set_args)
+        signature = (fully_qualified_module_name, set_args)
         if signature in self._signature_to_job:
             logging.info("Job %s recognized as a duplicate", job_name)
             return self._signature_to_job[signature]
@@ -371,7 +376,7 @@ class WorkflowBuilder:
             stdout_path = (job_dir / "___stdout.log").absolute()
 
         self._conda_script_generator.write_shell_script_to(
-            entry_point_name=python_path,
+            entry_point_name=fully_qualified_module_name,
             parameters=set_args,
             working_directory=job_dir,
             script_path=script_path,
@@ -472,7 +477,6 @@ class WorkflowBuilder:
         logging.info("Scheduled Python w/ Args job %s", job_name)
         return dependency_node
 
-    def set_resource_request(self, resource_request: ResourceRequest) -> ResourceRequest:
     def add_container(
         self,
         container_name: str,

@@ -15,7 +15,7 @@ Terminology
 - an `Artifact` is a pairing of a value together with one or more `DependencyNode`\ s.
 """
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Iterable, Optional, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Union
 
 from vistautils.parameters import Parameters
 
@@ -102,7 +102,7 @@ def limit_jobs_for_category(category: str, max_jobs: int):
 
 def run_python_on_args(
     job_name: Locator,
-    python_path: Path,
+    python_module_or_path: Any,
     set_args: str,
     *,
     depends_on,
@@ -131,7 +131,7 @@ def run_python_on_args(
     _assert_singleton_workflow_builder()
     return _SINGLETON_WORKFLOW_BUILDER.run_python_on_args(
         job_name=job_name,
-        python_path=python_path,
+        python_module_or_path=python_module_or_path,
         set_args=set_args,
         depends_on=depends_on,
         resource_request=resource_request,

@@ -16,7 +16,7 @@ def main(params: Parameters):
             for num in input_file:
                 output_file.write(f"{int(num)*x}\n")
 
-    logging.info("Writing to output file: %s", str(input_file_path.absolute()))
+    logging.info("Writing to output file: %s", str(output_file_path.absolute()))
 
     # Pause so that we can examine the job on the SAGA cluster
     time.sleep(30)
