@@ -206,7 +206,7 @@ class SlurmResourceRequest(ResourceRequest):
         job.add_pegasus_profile(
             runtime=self.job_time_in_minutes * 60,
             queue=str(self.partition.name),
-            project=None
+            project=_BORROWED_KEY
             if self.partition.name in (EPHEMERAL, SCAVENGE)
             else self.partition.name,
             glite_arguments=slurm_resource_content,
@@ -221,3 +221,4 @@ class SlurmResourceRequest(ResourceRequest):
 
 SLURM_RESOURCE_STRING = """--ntasks=1 --cpus-per-task={num_cpus} --gpus-per-task={num_gpus} --job-name={job_name} --mem={mem_str}"""
 _BACKEND_PARAM = "backend"
+_BORROWED_KEY = "borrowed"
