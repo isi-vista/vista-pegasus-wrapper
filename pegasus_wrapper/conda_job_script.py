@@ -133,13 +133,14 @@ class CondaJobScriptGenerator:
             python=python,
             stdout_file=stdout_file,
         )
+        ckpt_line = f"touch {ckpt_path.absolute()}" if ckpt_path else ""
 
         return CONDA_SCRIPT.format(
             conda_lines=conda_config.sbatch_lines() if conda_config else "",
             spack_lines=self.spack_config.sbatch_lines() if self.spack_config else "",
             working_directory=working_directory,
             python_job=python_job,
-            ckpt_line=f"touch {ckpt_path.absolute()}" if ckpt_path else "",
+            ckpt_line="\n".join([f"echo {ckpt_line}", ckpt_line]),
             pre_job=pre_job,
             post_job=post_job,
         )
@@ -234,6 +235,7 @@ cd {working_directory}
 """
 
 PYTHON_JOB = """
+echo `which {python}`
 echo {python} {path_or_entry_point} {param_file_or_args}
 {python} {path_or_entry_point} {param_file_or_args} 2>&1 | tee {stdout_file}
 """
