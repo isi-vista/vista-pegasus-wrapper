@@ -228,6 +228,7 @@ fi
 {conda_lines}
 {spack_lines}
 cd {working_directory}
+echo `which python`
 {pre_job}
 {python_job}
 {post_job}
