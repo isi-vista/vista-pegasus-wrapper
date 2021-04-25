@@ -263,8 +263,8 @@ class WorkflowBuilder:
             version="4.0",
             site=self._default_site,
             pfn=script_path,
-            is_stageable=False,
-            bypass_staging=False,
+            is_stageable=job_is_stageable,
+            bypass_staging=job_bypass_staging,
             arch=Arch.X86_64,
             os_type=OS.LINUX,
             container=container,
@@ -282,8 +282,7 @@ class WorkflowBuilder:
 
         resource_request = self.set_resource_request(resource_request)
 
-        if category:
-            job.add_dagman_profile(category=category)
+        job.add_dagman_profile(category=category, retry=str(times_to_retry_job))
 
         resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
 
@@ -320,6 +319,9 @@ class WorkflowBuilder:
         container: Optional[Container] = None,
         pre_job_bash: str = "",
         post_job_bash: str = "",
+        job_is_stageable: bool = False,
+        job_bypass_staging: bool = False,
+        times_to_retry_job: int = 0,
     ) -> DependencyNode:
         """
         Schedule a job to run the given *python_module* on the given *parameters*.
@@ -330,109 +332,22 @@ class WorkflowBuilder:
         This method returns a `DependencyNode` which can be used in *depends_on*
         for future jobs.
         """
-        job_dir = self.directory_for(job_name)
-        ckpt_name = job_name / "___ckpt"
-        checkpoint_path = job_dir / "___ckpt"
-
-        depends_on = _canonicalize_depends_on(depends_on)
-        if isinstance(python_module, (str, Path)):
-            fully_qualified_module_name = python_module
-        else:
-            fully_qualified_module_name = fully_qualified_name(python_module)
-
-        # allow users to specify the parameters as a dict for convenience
-        if not isinstance(parameters, Parameters):
-            parameters = Parameters.from_mapping(parameters)
-
-        # If we've already scheduled this identical job,
-        # then don't schedule it again.
-        params_sink = CharSink.to_string()
-        YAMLParametersWriter().write(parameters, params_sink)
-        signature = (fully_qualified_module_name, params_sink.last_string_written)
-        if signature in self._signature_to_job:
-            logging.info("Job %s recognized as a duplicate", job_name)
-            return self._signature_to_job[signature]
-
-        script_path = job_dir / "___run.sh"
-        stdout_path = parameters.string(
-            "logfile", default=str((job_dir / "___stdout.log").absolute())
-        )
-        self._conda_script_generator.write_shell_script_to(
-            entry_point_name=fully_qualified_module_name,
-            parameters=parameters,
-            working_directory=job_dir,
-            script_path=script_path,
-            params_path=job_dir / "____params.params",
-            stdout_file=Path(stdout_path),
-            ckpt_path=checkpoint_path,
+        return self._run_python_job(
+            job_name,
+            python_module,
+            parameters,
+            depends_on=depends_on,
+            resource_request=resource_request,
             override_conda_config=override_conda_config,
-            python="pypy3" if use_pypy else "python",
-            pre_job=pre_job_bash,
-            post_job=post_job_bash,
+            category=category,
+            use_pypy=use_pypy,
+            container=container,
+            pre_job_bash=pre_job_bash,
+            post_job_bash=post_job_bash,
+            job_is_stageable=job_is_stageable,
+            job_bypass_staging=job_bypass_staging,
+            times_to_retry_job=times_to_retry_job,
         )
-
-        if (
-            self._job_name_for(job_name)
-            not in self._transformation_name_to_transformation
-        ):
-            logging.info(
-                "Transformation %s recognized as new", self._job_name_for(job_name)
-            )
-            self._transformation_name_to_transformation[
-                self._job_name_for(job_name)
-            ] = Transformation(
-                self._job_name_for(job_name),
-                namespace=self._namespace,
-                version="4.0",
-                site=self._default_site,
-                pfn=script_path,
-                is_stageable=False,
-                bypass_staging=False,
-                arch=Arch.X86_64,
-                os_type=OS.LINUX,
-                container=container,
-            )
-            self._transformation_catalog.add_transformations(
-                self._transformation_name_to_transformation[self._job_name_for(job_name)]
-            )
-
-        script_executable = self._transformation_name_to_transformation[
-            self._job_name_for(job_name)
-        ]
-
-        job = Job(script_executable)
-        self._job_graph.add_jobs(job)
-        for parent_dependency in depends_on:
-            if parent_dependency.job:
-                self._job_graph.add_dependency(job, parents=[parent_dependency.job])
-            for out_file in parent_dependency.output_files:
-                job.add_inputs(out_file)
-
-        resource_request = self.set_resource_request(resource_request)
-
-        if category:
-            job.add_dagman_profile(category=category)
-
-        resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
-
-        # Handle Output Files
-        # This is currently only handled as the checkpoint file
-        # See: https://github.com/isi-vista/vista-pegasus-wrapper/issues/25
-        # If the checkpoint file already exists, we want to add it to the replica catalog
-        # so that we don't run the job corresponding to the checkpoint file again
-        checkpoint_pegasus_file = self.create_file(
-            f"{ckpt_name}", checkpoint_path, add_to_catalog=checkpoint_path.exists()
-        )
-
-        job.add_outputs(checkpoint_pegasus_file, stage_out=False)
-
-        dependency_node = DependencyNode.from_job(
-            job, output_files=[checkpoint_pegasus_file]
-        )
-        self._signature_to_job[signature] = dependency_node
-
-        logging.info("Scheduled Python job %s", job_name)
-        return dependency_node
 
     def run_python_on_args(
         self,
@@ -445,14 +360,12 @@ class WorkflowBuilder:
         override_conda_config: Optional[CondaConfiguration] = None,
         category: Optional[str] = None,
         use_pypy: bool = False,
-        stdout_path: Optional[Path] = None,
         job_is_stageable: bool = False,
         job_bypass_staging: bool = False,
-        set_pegasus_args: str = "",
-        output_files: Optional[Union[Path, str, Iterable[Union[Path, str]]]] = None,
         pre_job_bash: str = "",
         post_job_bash: str = "",
         times_to_retry_job: int = 0,
+        container: Optional[Container] = None,
     ) -> DependencyNode:
         """
         Schedule a job to run the given *python_script* with the given *set_args*.
@@ -463,129 +376,22 @@ class WorkflowBuilder:
         This method returns a `DependencyNode` which can be used in *depends_on*
         for future jobs.
         """
-        job_dir = self.directory_for(job_name)
-        ckpt_name = job_name / "___ckpt"
-        checkpoint_path = job_dir / "___ckpt"
-        script_path = job_dir / "___run.sh"
-
-        depends_on = _canonicalize_depends_on(depends_on)
-
-        if isinstance(python_module_or_path, (str, Path)):
-            fully_qualified_module_name = python_module_or_path
-        else:
-            fully_qualified_module_name = fully_qualified_name(python_module_or_path)
-
-        # If we've already scheduled this identical job,
-        # then don't schedule it again.
-        signature = (fully_qualified_module_name, set_args)
-        if signature in self._signature_to_job:
-            logging.info("Job %s recognized as a duplicate", job_name)
-            return self._signature_to_job[signature]
-
-        if not stdout_path:
-            stdout_path = (job_dir / "___stdout.log").absolute()
-
-        self._conda_script_generator.write_shell_script_to(
-            entry_point_name=fully_qualified_module_name,
-            parameters=set_args,
-            working_directory=job_dir,
-            script_path=script_path,
-            params_path=job_dir / "____params.params",
-            stdout_file=Path(stdout_path),
-            ckpt_path=checkpoint_path,
+        return self._run_python_job(
+            job_name,
+            python_module_or_path,
+            set_args,
+            depends_on=depends_on,
+            resource_request=resource_request,
             override_conda_config=override_conda_config,
-            python="pypy3" if use_pypy else "python",
-            treat_params_as_cmd_args=True,
-            pre_job=pre_job_bash,
-            post_job=post_job_bash,
+            category=category,
+            use_pypy=use_pypy,
+            container=container,
+            pre_job_bash=pre_job_bash,
+            post_job_bash=post_job_bash,
+            job_is_stageable=job_is_stageable,
+            job_bypass_staging=job_bypass_staging,
+            times_to_retry_job=times_to_retry_job,
         )
-        if (
-            self._job_name_for(job_name)
-            not in self._transformation_name_to_transformation
-        ):
-            logging.info(
-                "Transformation %s recognized as new", self._job_name_for(job_name)
-            )
-            self._transformation_name_to_transformation[
-                self._job_name_for(job_name)
-            ] = Transformation(
-                self._job_name_for(job_name),
-                namespace=self._namespace,
-                version="4.0",
-                site=self._default_site,
-                pfn=str(script_path.absolute()),
-                is_stageable=job_is_stageable,
-                bypass_staging=job_bypass_staging,
-                arch=Arch.X86_64,
-                os_type=OS.LINUX,
-            )
-            self._transformation_catalog.add_transformations(
-                self._transformation_name_to_transformation[self._job_name_for(job_name)]
-            )
-
-        script_executable = self._transformation_name_to_transformation[
-            self._job_name_for(job_name)
-        ]
-
-        job = Job(script_executable)
-
-        set_pegasus_args = set_pegasus_args.split(" ")
-
-        args: List[Union[File, float, int, str]] = []
-        for tok in set_pegasus_args:
-            if tok in self._lfn_to_file:
-                args.append(self._lfn_to_file[tok])
-            else:
-                args.append(tok)
-
-        job.add_args(*args)
-
-        self._job_graph.add_jobs(job)
-        for parent_dependency in depends_on:
-            if parent_dependency.job:
-                self._job_graph.add_dependency(job, parents=[parent_dependency.job])
-            for out_file in parent_dependency.output_files:
-                job.add_inputs(out_file)
-
-        resource_request = self.set_resource_request(resource_request)
-
-        if category:
-            job.add_dagman_profile(category=category, retry=times_to_retry_job)
-
-        resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
-
-        # Handle Output Files
-        # This is currently only handled as the checkpoint file
-        # See: https://github.com/isi-vista/vista-pegasus-wrapper/issues/25
-        # If the checkpoint file already exists, we want to add it to the replica catalog
-        # so that we don't run the job corresponding to the checkpoint file again
-        checkpoint_pegasus_file = self.create_file(
-            f"{ckpt_name}", checkpoint_path, add_to_catalog=checkpoint_path.exists()
-        )
-
-        job.add_checkpoint(checkpoint_pegasus_file, stage_out=False)
-        job_outputs = []
-
-        if output_files:
-            for output_file in _ensure_iterable(output_files):
-                job_output_file = self.create_file(
-                    str(output_file) if isinstance(output_file, Path) else output_file,
-                    output_file,
-                    add_to_catalog=output_file.exists()
-                    if isinstance(output_file, Path)
-                    else False,
-                )
-                logging.debug("Setting %s as output file for job %s", output_file, job)
-                job.add_outputs(job_output_file)
-                job_outputs.append(output_file)
-
-        dependency_node = DependencyNode.from_job(
-            job, output_files=[checkpoint_pegasus_file].extend(job_outputs)
-        )
-        self._signature_to_job[signature] = dependency_node
-
-        logging.info("Scheduled Python w/ Args job %s", job_name)
-        return dependency_node
 
     def add_container(
         self,
