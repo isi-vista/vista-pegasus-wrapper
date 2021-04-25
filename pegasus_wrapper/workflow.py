@@ -7,7 +7,7 @@ and should instead use the methods in the root of the package.
 import logging
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Union
+from typing import Any, Dict, List, Mapping, Optional, Set, Union
 
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
@@ -28,7 +28,6 @@ from pegasus_wrapper.pegasus_utils import (
 )
 from pegasus_wrapper.resource_request import ResourceRequest
 from pegasus_wrapper.scripts import nuke_checkpoints
-from pegasus_wrapper.utils import _ensure_iterable
 
 from Pegasus.api import (
     OS,
@@ -213,6 +212,7 @@ class WorkflowBuilder:
         job_is_stageable: bool = False,
         job_bypass_staging: bool = False,
         times_to_retry_job: int = 0,
+        treat_params_as_cmd_args: bool = False,
     ) -> DependencyNode:
         """
         Internal function to schedule a python job.
@@ -221,6 +221,7 @@ class WorkflowBuilder:
         ckpt_name = job_name / "___ckpt"
         checkpoint_path = job_dir / "___ckpt"
         signature_args = None
+        depends_on = _canonicalize_depends_on(depends_on)
 
         if isinstance(python_module_or_path, (str, Path)):
             computed_module_or_path = python_module_or_path
@@ -255,6 +256,7 @@ class WorkflowBuilder:
             python="pypy3" if use_pypy else "python",
             pre_job=pre_job_bash,
             post_job=post_job_bash,
+            treat_params_as_cmd_args=treat_params_as_cmd_args,
         )
 
         script_executable = Transformation(
@@ -391,6 +393,7 @@ class WorkflowBuilder:
             job_is_stageable=job_is_stageable,
             job_bypass_staging=job_bypass_staging,
             times_to_retry_job=times_to_retry_job,
+            treat_params_as_cmd_args=True,
         )
 
     def add_container(
