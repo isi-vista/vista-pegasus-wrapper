@@ -157,7 +157,12 @@ class SlurmResourceRequest(ResourceRequest):
             run_on_single_node=params.optional_string("run_on_single_node"),
         )
 
-    def unify(self, other: "SlurmResourceRequest") -> "SlurmResourceRequest":
+    def unify(self, other: "ResourceRequest") -> "SlurmResourceRequest":
+        if not isinstance(other, SlurmResourceRequest):
+            raise RuntimeError(
+                f"Unable to unify a Non-SlurmResourceRequest with a Slurm Resource Request."
+                f"Other: {other} & Self {self}"
+            )
         partition = other.partition or self.partition
         return SlurmResourceRequest(
             partition=partition.name,
