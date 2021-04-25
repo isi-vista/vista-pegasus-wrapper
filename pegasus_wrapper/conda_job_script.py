@@ -230,6 +230,7 @@ fi
 cd {working_directory}
 echo `which python`
 {pre_job}
+echo {python_job}
 {python_job}
 {post_job}
 {ckpt_line}

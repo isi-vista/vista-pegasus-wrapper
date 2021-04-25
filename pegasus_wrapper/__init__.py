@@ -66,6 +66,7 @@ def run_python_on_parameters(
     use_pypy: bool = False,
     pre_job_bash: str = "",
     post_job_bash: str = "",
+    times_to_retry_job: int = 0,
 ) -> DependencyNode:
     """
     Schedule a job to run the given *python_module* on the given *parameters*.
@@ -89,6 +90,7 @@ def run_python_on_parameters(
         container=container,
         pre_job_bash=pre_job_bash,
         post_job_bash=post_job_bash,
+        times_to_retry_job=times_to_retry_job,
     )
 
 

@@ -215,7 +215,7 @@ class WorkflowBuilder:
         treat_params_as_cmd_args: bool = False,
     ) -> DependencyNode:
         """
-        Internal function to schedule a python job.
+        Internal function to schedule a python job for centralized logic.
         """
         job_dir = self.directory_for(job_name)
         ckpt_name = job_name / "___ckpt"
@@ -333,6 +333,11 @@ class WorkflowBuilder:
 
         This method returns a `DependencyNode` which can be used in *depends_on*
         for future jobs.
+
+        `pre_job_bash` and `post_job_bash` are not provided as editable fields to append
+        and additional job into this python job. Scoring, Post-Processing, Etc should be
+        its own job. They are provided to allow for cases like 'export PYTHONPATH={path}'
+        where a job expects environment variables to be set.
         """
         return self._run_python_job(
             job_name,
@@ -377,6 +382,11 @@ class WorkflowBuilder:
 
         This method returns a `DependencyNode` which can be used in *depends_on*
         for future jobs.
+
+        `pre_job_bash` and `post_job_bash` are not provided as editable fields to append
+        and additional job into this python job. Scoring, Post-Processing, Etc should be
+        its own job. They are provided to allow for cases like 'export PYTHONPATH={path}'
+        where a job expects environment variables to be set.
         """
         return self._run_python_job(
             job_name,
