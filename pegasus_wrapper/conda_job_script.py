@@ -181,7 +181,7 @@ class CondaJobScriptGenerator:
         else:
             raise RuntimeError(
                 f"Parameters must be either Parameters, path to a param file, "
-                f"or a mapping if treat_params_as_cmd_args is True, "
+                f"or a string if treat_params_as_cmd_args is True, "
                 f"but got {parameters}"
             )
 

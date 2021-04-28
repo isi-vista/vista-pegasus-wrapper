@@ -229,6 +229,10 @@ class WorkflowBuilder:
             computed_module_or_path = fully_qualified_name(python_module_or_path)
 
         if not isinstance(args_or_params, str):
+            # allow users to specify the parameters as a dict for convenience
+            if not isinstance(args_or_params, Parameters):
+                args_or_params = Parameters.from_mapping(args_or_params)
+
             params_sink = CharSink.to_string()
             YAMLParametersWriter().write(args_or_params, params_sink)
             signature_args = params_sink.last_string_written
