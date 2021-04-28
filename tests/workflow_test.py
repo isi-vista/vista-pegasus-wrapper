@@ -752,7 +752,9 @@ def test_dax_with_job_on_saga_with_dict_as_params(tmp_path):
 
     add_job_name = Locator(_parse_parts("jobs/add"))
     add_dir = directory_for(add_job_name)
-    run_python_on_args(add_job_name, add_main, add_args, depends_on=[sort_artifact])
+    run_python_on_args(
+        add_job_name, "add_job_main.py", add_args, depends_on=[sort_artifact]
+    )
     assert (add_dir / "___run.sh").exists()
 
     dax_file_one = write_workflow_description(tmp_path)
