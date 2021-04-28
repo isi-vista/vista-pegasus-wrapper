@@ -1,9 +1,18 @@
-import subprocess
 from random import Random
 
 from immutablecollections import immutableset
 from vistautils.parameters import Parameters
 
+from pegasus_wrapper import (
+    add_container,
+    directory_for,
+    experiment_directory,
+    initialize_vista_pegasus_wrapper,
+    limit_jobs_for_category,
+    run_python_on_args,
+    run_python_on_parameters,
+    write_workflow_description,
+)
 from pegasus_wrapper.artifact import ValueArtifact
 from pegasus_wrapper.locator import Locator, _parse_parts
 from pegasus_wrapper.pegasus_utils import build_submit_script
@@ -11,49 +20,9 @@ from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.scripts.add_y import main as add_main
 from pegasus_wrapper.scripts.multiply_by_x import main as multiply_by_x_main
 from pegasus_wrapper.scripts.sort_nums_in_file import main as sort_nums_main
-from pegasus_wrapper.workflow import WorkflowBuilder
 
 import pytest
 from yaml import SafeLoader, load
-
-
-def test_simple_dax(tmp_path):
-    params = Parameters.from_mapping(
-        {
-            "workflow_name": "Test",
-            "workflow_created": "Testing",
-            "workflow_log_dir": str(tmp_path / "log"),
-            "workflow_directory": str(tmp_path / "working"),
-            "site": "saga",
-            "namespace": "test",
-            "partition": "gaia",
-            "experiment_name": "fred",
-            "home_dir": str(tmp_path),
-        }
-    )
-    workflow_builder = WorkflowBuilder.from_parameters(params)
-    assert workflow_builder.name == "Test"
-    assert workflow_builder.created_by == "Testing"
-    assert (
-        workflow_builder._workflow_directory  # pylint:disable=protected-access
-        == tmp_path / "working"
-    )
-    assert workflow_builder._namespace == "test"  # pylint:disable=protected-access
-    assert workflow_builder._default_site == "saga"  # pylint:disable=protected-access
-    assert workflow_builder.default_resource_request  # pylint:disable=protected-access
-    assert workflow_builder._job_graph is not None  # pylint:disable=protected-access
-    assert workflow_builder._experiment_name == "fred"  # pylint:disable=protected-access
-
-
-def test_locator():
-    job = Locator(_parse_parts("job"))
-    example = Locator(_parse_parts("example/path"))
-    combined = example / job
-    combined_from_string = example / "job"
-
-    assert combined.__repr__() == combined_from_string.__repr__()
-    with pytest.raises(RuntimeError):
-        _ = combined / 90
 
 
 def test_dax_with_job_on_saga(tmp_path):
@@ -91,23 +60,23 @@ def test_dax_with_job_on_saga(tmp_path):
     add_args = f"{sorted_output_file} {add_output_file} --y 10"
 
     resources = SlurmResourceRequest.from_parameters(slurm_params)
-    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+    initialize_vista_pegasus_wrapper(workflow_params)
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
     multiply_artifact = ValueArtifact(
         multiply_output_file,
-        depends_on=workflow_builder.run_python_on_parameters(
+        depends_on=run_python_on_parameters(
             multiply_job_name, multiply_by_x_main, multiply_params, depends_on=[]
         ),
         locator=Locator("multiply"),
     )
-    multiple_dir = workflow_builder.directory_for(multiply_job_name)
+    multiple_dir = directory_for(multiply_job_name)
     assert (multiple_dir / "___run.sh").exists()
     assert (multiple_dir / "____params.params").exists()
 
     sort_job_name = Locator(_parse_parts("jobs/sort"))
-    sort_dir = workflow_builder.directory_for(sort_job_name)
-    sort_artifact = workflow_builder.run_python_on_parameters(
+    sort_dir = directory_for(sort_job_name)
+    sort_artifact = run_python_on_parameters(
         sort_job_name,
         sort_nums_main,
         sort_params,
@@ -119,30 +88,20 @@ def test_dax_with_job_on_saga(tmp_path):
     assert (sort_dir / "____params.params").exists()
 
     add_job_name = Locator(_parse_parts("jobs/add"))
-    add_dir = workflow_builder.directory_for(add_job_name)
-    workflow_builder.run_python_on_args(
-        add_job_name, add_main, add_args, depends_on=[sort_artifact]
-    )
+    add_dir = directory_for(add_job_name)
+    run_python_on_args(add_job_name, add_main, add_args, depends_on=[sort_artifact])
     assert (add_dir / "___run.sh").exists()
 
-    dax_file_one = workflow_builder.write_dax_to_dir(tmp_path)
-    dax_file_two = workflow_builder.write_dax_to_dir()
+    dax_file_one = write_workflow_description(tmp_path)
+    dax_file_two = write_workflow_description()
 
     assert dax_file_one.exists()
     assert dax_file_two.exists()
 
     submit_script_one = tmp_path / "submit_script_one.sh"
     submit_script_two = tmp_path / "submit_script_two.sh"
-    build_submit_script(
-        submit_script_one,
-        str(dax_file_one),
-        workflow_builder._workflow_directory,  # pylint:disable=protected-access
-    )
-    build_submit_script(
-        submit_script_two,
-        str(dax_file_two),
-        workflow_builder._workflow_directory,  # pylint:disable=protected-access
-    )
+    build_submit_script(submit_script_one, str(dax_file_one), experiment_directory())
+    build_submit_script(submit_script_two, str(dax_file_two), experiment_directory())
 
     assert submit_script_one.exists()
     assert submit_script_two.exists()
@@ -165,17 +124,6 @@ def test_dax_with_job_on_saga(tmp_path):
     )
     assert properties_file.exists()
 
-    submit_script_process = subprocess.Popen(
-        ["sh", str(submit_script_one)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        encoding="utf-8",
-    )
-    stdout, stderr = submit_script_process.communicate()
-
-    print(stdout)
-    print(stderr)
-
 
 def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
     workflow_params = Parameters.from_mapping(
@@ -194,7 +142,7 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
         {"partition": "gaia", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
     resources = SlurmResourceRequest.from_parameters(slurm_params)
-    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+    initialize_vista_pegasus_wrapper(workflow_params)
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
     multiply_output_file = tmp_path / "multiplied_nums.txt"
@@ -203,7 +151,7 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
         {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
     )
 
-    multiple_dir = workflow_builder.directory_for(multiply_job_name)
+    multiple_dir = directory_for(multiply_job_name)
 
     # Create checkpointed file so that when trying to create the job again,
     # Pegasus just adds the file to the Replica Catalog
@@ -216,7 +164,7 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
 
     multiply_artifact = ValueArtifact(
         multiply_output_file,
-        depends_on=workflow_builder.run_python_on_parameters(
+        depends_on=run_python_on_parameters(
             multiply_job_name, multiply_by_x_main, multiply_params, depends_on=[]
         ),
         locator=Locator("multiply"),
@@ -227,7 +175,7 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
     sort_params = Parameters.from_mapping(
         {"input_file": multiply_output_file, "output_file": sorted_output_file}
     )
-    workflow_builder.run_python_on_parameters(
+    run_python_on_parameters(
         sort_job_name,
         sort_nums_main,
         sort_params,
@@ -235,7 +183,7 @@ def test_dax_with_checkpointed_jobs_on_saga(tmp_path):
         resource_request=resources,
     )
 
-    workflow_builder.write_dax_to_dir()
+    write_workflow_description()
 
     site_catalog = workflow_params.existing_directory("workflow_directory") / "sites.yml"
     assert site_catalog.exists()
@@ -274,7 +222,7 @@ def test_clearing_ckpts(monkeypatch, tmp_path):
         }
     )
 
-    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+    initialize_vista_pegasus_wrapper(workflow_params)
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
     multiply_output_file = tmp_path / "multiplied_nums.txt"
@@ -283,17 +231,17 @@ def test_clearing_ckpts(monkeypatch, tmp_path):
         {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
     )
 
-    multiple_dir = workflow_builder.directory_for(multiply_job_name)
+    multiple_dir = directory_for(multiply_job_name)
 
     checkpointed_multiply_file = multiple_dir / "___ckpt"
     checkpointed_multiply_file.touch()
     multiply_output_file.touch()
 
-    workflow_builder.run_python_on_parameters(
+    run_python_on_parameters(
         multiply_job_name, multiply_by_x_main, multiply_params, depends_on=[]
     )
     monkeypatch.setattr("builtins.input", lambda _: "y")
-    workflow_builder.write_dax_to_dir()
+    write_workflow_description()
     assert not checkpointed_multiply_file.exists()
 
 
@@ -312,7 +260,7 @@ def test_not_clearing_ckpts(monkeypatch, tmp_path):
         }
     )
 
-    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+    initialize_vista_pegasus_wrapper(workflow_params)
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
     multiply_output_file = tmp_path / "multiplied_nums.txt"
@@ -321,17 +269,17 @@ def test_not_clearing_ckpts(monkeypatch, tmp_path):
         {"input_file": multiply_input_file, "output_file": multiply_output_file, "x": 4}
     )
 
-    multiple_dir = workflow_builder.directory_for(multiply_job_name)
+    multiple_dir = directory_for(multiply_job_name)
 
     checkpointed_multiply_file = multiple_dir / "___ckpt"
     checkpointed_multiply_file.touch()
     multiply_output_file.touch()
 
-    workflow_builder.run_python_on_parameters(
+    run_python_on_parameters(
         multiply_job_name, multiply_by_x_main, multiply_params, depends_on=[]
     )
     monkeypatch.setattr("builtins.input", lambda _: "n")
-    workflow_builder.write_dax_to_dir()
+    write_workflow_description()
     assert checkpointed_multiply_file.exists()
 
 
@@ -369,7 +317,7 @@ def test_dax_with_categories(tmp_path):
             "home_dir": str(tmp_path),
         }
     )
-    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+    initialize_vista_pegasus_wrapper(workflow_params)
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
     multiply_output_file = tmp_path / "multiplied_nums.txt"
@@ -379,7 +327,7 @@ def test_dax_with_categories(tmp_path):
     )
     multiply_job_category = "arithmetic"
 
-    workflow_builder.run_python_on_parameters(
+    run_python_on_parameters(
         multiply_job_name,
         multiply_by_x_main,
         multiply_params,
@@ -388,7 +336,7 @@ def test_dax_with_categories(tmp_path):
     )
 
     # Check that the multiply job has the appropriate category set in the DAX file
-    dax_file = workflow_builder.write_dax_to_dir()
+    dax_file = write_workflow_description()
     assert dax_file.exists()
 
     assert _job_in_dax_has_category(dax_file, multiply_job_name, multiply_job_category)
@@ -415,7 +363,7 @@ def test_dax_with_saga_categories(tmp_path):
         {"partition": multiply_partition, "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
     multiply_resources = SlurmResourceRequest.from_parameters(multiply_slurm_params)
-    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+    initialize_vista_pegasus_wrapper(workflow_params)
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
     multiply_output_file = tmp_path / "multiplied_nums.txt"
@@ -426,7 +374,7 @@ def test_dax_with_saga_categories(tmp_path):
 
     multiply_artifact = ValueArtifact(
         multiply_output_file,
-        depends_on=workflow_builder.run_python_on_parameters(
+        depends_on=run_python_on_parameters(
             multiply_job_name,
             multiply_by_x_main,
             multiply_params,
@@ -447,7 +395,7 @@ def test_dax_with_saga_categories(tmp_path):
     sort_params = Parameters.from_mapping(
         {"input_file": multiply_output_file, "output_file": sorted_output_file}
     )
-    workflow_builder.run_python_on_parameters(
+    run_python_on_parameters(
         sort_job_name,
         sort_nums_main,
         sort_params,
@@ -455,7 +403,7 @@ def test_dax_with_saga_categories(tmp_path):
         resource_request=sort_resources,
     )
 
-    dax_file = workflow_builder.write_dax_to_dir()
+    dax_file = write_workflow_description()
     assert dax_file.exists()
 
     # Check that the multiply and sort jobs have the appropriate partition-defined categories set in
@@ -483,7 +431,7 @@ def test_category_max_jobs(tmp_path):
         {"partition": "gaia", "num_cpus": 1, "num_gpus": 0, "memory": "4G"}
     )
     multiply_resources = SlurmResourceRequest.from_parameters(multiply_slurm_params)
-    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+    initialize_vista_pegasus_wrapper(workflow_params)
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
     multiply_output_file = tmp_path / "multiplied_nums.txt"
@@ -494,7 +442,7 @@ def test_category_max_jobs(tmp_path):
 
     multiply_artifact = ValueArtifact(
         multiply_output_file,
-        depends_on=workflow_builder.run_python_on_parameters(
+        depends_on=run_python_on_parameters(
             multiply_job_name,
             multiply_by_x_main,
             multiply_params,
@@ -520,7 +468,7 @@ def test_category_max_jobs(tmp_path):
     sort_params = Parameters.from_mapping(
         {"input_file": multiply_output_file, "output_file": sorted_output_file}
     )
-    workflow_builder.run_python_on_parameters(
+    run_python_on_parameters(
         sort_job_name,
         sort_nums_main,
         sort_params,
@@ -528,8 +476,8 @@ def test_category_max_jobs(tmp_path):
         resource_request=sort_resources,
     )
 
-    workflow_builder.limit_jobs_for_category("gaia", 1)
-    workflow_builder.write_dax_to_dir()
+    limit_jobs_for_category("gaia", 1)
+    write_workflow_description()
 
     site_catalog = workflow_params.existing_directory("workflow_directory") / "sites.yml"
     assert site_catalog.exists()
@@ -598,18 +546,18 @@ def test_dax_test_exclude_nodes_on_saga(tmp_path):
     resources = SlurmResourceRequest.from_parameters(
         slurm_params.unify({"run_on_single_node": sample_include})
     )
-    workflow_builder = WorkflowBuilder.from_parameters(params)
+    initialize_vista_pegasus_wrapper(params)
 
     multiply_job_locator = Locator(_parse_parts("jobs/multiply"))
     multiply_artifact = ValueArtifact(
         multiply_output_file,
-        depends_on=workflow_builder.run_python_on_parameters(
+        depends_on=run_python_on_parameters(
             multiply_job_locator, multiply_by_x_main, multiply_params, depends_on=[]
         ),
         locator=Locator("multiply"),
     )
     sort_job_locator = Locator(_parse_parts("jobs/sort"))
-    workflow_builder.run_python_on_parameters(
+    run_python_on_parameters(
         sort_job_locator,
         sort_nums_main,
         sort_params,
@@ -617,7 +565,7 @@ def test_dax_test_exclude_nodes_on_saga(tmp_path):
         resource_request=resources,
     )
 
-    dax_file = workflow_builder.write_dax_to_dir(tmp_path)
+    dax_file = write_workflow_description(tmp_path)
     with dax_file.open("r") as dax:
         dax_yaml = load(dax, Loader=SafeLoader)
     root = dax_yaml["jobs"]
@@ -677,23 +625,19 @@ def test_dax_with_job_in_container(tmp_path):
     )
 
     resources = SlurmResourceRequest.from_parameters(slurm_params)
-    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+    initialize_vista_pegasus_wrapper(workflow_params)
 
     # Add Container
-    example_docker = workflow_builder.add_container(
-        "example_container", "docker", tmp_path / "docker.img"
-    )
+    example_docker = add_container("example_container", "docker", tmp_path / "docker.img")
 
     with pytest.raises(ValueError):
-        _ = workflow_builder.add_container(
-            "fake_container", "invalid", tmp_path / "invalid_docker.img"
-        )
+        _ = add_container("fake_container", "invalid", tmp_path / "invalid_docker.img")
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
 
     multiply_artifact = ValueArtifact(
         multiply_output_file,
-        depends_on=workflow_builder.run_python_on_parameters(
+        depends_on=run_python_on_parameters(
             multiply_job_name,
             multiply_by_x_main,
             multiply_params,
@@ -702,13 +646,13 @@ def test_dax_with_job_in_container(tmp_path):
         ),
         locator=Locator("multiply"),
     )
-    multiple_dir = workflow_builder.directory_for(multiply_job_name)
+    multiple_dir = directory_for(multiply_job_name)
     assert (multiple_dir / "___run.sh").exists()
     assert (multiple_dir / "____params.params").exists()
 
     sort_job_name = Locator(_parse_parts("jobs/sort"))
-    sort_dir = workflow_builder.directory_for(sort_job_name)
-    workflow_builder.run_python_on_parameters(
+    sort_dir = directory_for(sort_job_name)
+    run_python_on_parameters(
         sort_job_name,
         sort_nums_main,
         sort_params,
@@ -719,7 +663,7 @@ def test_dax_with_job_in_container(tmp_path):
     assert (sort_dir / "___run.sh").exists()
     assert (sort_dir / "____params.params").exists()
 
-    dax_file_one = workflow_builder.write_dax_to_dir()
+    dax_file_one = write_workflow_description()
 
     assert dax_file_one.exists()
 
@@ -779,23 +723,23 @@ def test_dax_with_job_on_saga_with_dict_as_params(tmp_path):
     add_args = f"{sorted_output_file} {add_output_file} --y 10"
 
     resources = SlurmResourceRequest.from_parameters(slurm_params)
-    workflow_builder = WorkflowBuilder.from_parameters(workflow_params)
+    initialize_vista_pegasus_wrapper(workflow_params)
 
     multiply_job_name = Locator(_parse_parts("jobs/multiply"))
     multiply_artifact = ValueArtifact(
         multiply_output_file,
-        depends_on=workflow_builder.run_python_on_parameters(
+        depends_on=run_python_on_parameters(
             multiply_job_name, multiply_by_x_main, multiply_params, depends_on=[]
         ),
         locator=Locator("multiply"),
     )
-    multiple_dir = workflow_builder.directory_for(multiply_job_name)
+    multiple_dir = directory_for(multiply_job_name)
     assert (multiple_dir / "___run.sh").exists()
     assert (multiple_dir / "____params.params").exists()
 
     sort_job_name = Locator(_parse_parts("jobs/sort"))
-    sort_dir = workflow_builder.directory_for(sort_job_name)
-    sort_artifact = workflow_builder.run_python_on_parameters(
+    sort_dir = directory_for(sort_job_name)
+    sort_artifact = run_python_on_parameters(
         sort_job_name,
         sort_nums_main,
         sort_params,
@@ -807,30 +751,20 @@ def test_dax_with_job_on_saga_with_dict_as_params(tmp_path):
     assert (sort_dir / "____params.params").exists()
 
     add_job_name = Locator(_parse_parts("jobs/add"))
-    add_dir = workflow_builder.directory_for(add_job_name)
-    workflow_builder.run_python_on_args(
-        add_job_name, add_main, add_args, depends_on=[sort_artifact]
-    )
+    add_dir = directory_for(add_job_name)
+    run_python_on_args(add_job_name, add_main, add_args, depends_on=[sort_artifact])
     assert (add_dir / "___run.sh").exists()
 
-    dax_file_one = workflow_builder.write_dax_to_dir(tmp_path)
-    dax_file_two = workflow_builder.write_dax_to_dir()
+    dax_file_one = write_workflow_description(tmp_path)
+    dax_file_two = write_workflow_description()
 
     assert dax_file_one.exists()
     assert dax_file_two.exists()
 
     submit_script_one = tmp_path / "submit_script_one.sh"
     submit_script_two = tmp_path / "submit_script_two.sh"
-    build_submit_script(
-        submit_script_one,
-        str(dax_file_one),
-        workflow_builder._workflow_directory,  # pylint:disable=protected-access
-    )
-    build_submit_script(
-        submit_script_two,
-        str(dax_file_two),
-        workflow_builder._workflow_directory,  # pylint:disable=protected-access
-    )
+    build_submit_script(submit_script_one, str(dax_file_one), experiment_directory())
+    build_submit_script(submit_script_two, str(dax_file_two), experiment_directory())
 
     assert submit_script_one.exists()
     assert submit_script_two.exists()
