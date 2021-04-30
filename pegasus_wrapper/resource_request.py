@@ -157,7 +157,12 @@ class SlurmResourceRequest(ResourceRequest):
             run_on_single_node=params.optional_string("run_on_single_node"),
         )
 
-    def unify(self, other: "SlurmResourceRequest") -> "SlurmResourceRequest":
+    def unify(self, other: "ResourceRequest") -> "SlurmResourceRequest":
+        if not isinstance(other, SlurmResourceRequest):
+            raise RuntimeError(
+                f"Unable to unify a Non-SlurmResourceRequest with a Slurm Resource Request."
+                f"Other: {other} & Self {self}"
+            )
         partition = other.partition or self.partition
         return SlurmResourceRequest(
             partition=partition.name,
@@ -204,7 +209,7 @@ class SlurmResourceRequest(ResourceRequest):
             slurm_resource_content += f" --qos={self.partition.name}"
 
         job.add_pegasus_profile(
-            runtime=self.job_time_in_minutes * 60,
+            runtime=str(self.job_time_in_minutes * 60),
             queue=str(self.partition.name),
             project=_BORROWED_KEY
             if self.partition.name in (EPHEMERAL, SCAVENGE)

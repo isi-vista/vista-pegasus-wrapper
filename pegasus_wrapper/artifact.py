@@ -40,7 +40,7 @@ class DependencyNode:
 
     @staticmethod
     def already_done() -> "DependencyNode":
-        return DependencyNode(job=None)
+        return DependencyNode(job=None, output_files=immutableset())
 
 
 class Artifact(Protocol):

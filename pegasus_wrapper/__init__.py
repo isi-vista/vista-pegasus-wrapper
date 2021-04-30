@@ -15,7 +15,7 @@ Terminology
 - an `Artifact` is a pairing of a value together with one or more `DependencyNode`\ s.
 """
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Union
 
 from vistautils.parameters import Parameters
 
@@ -64,6 +64,9 @@ def run_python_on_parameters(
     category: Optional[str] = None,
     container=None,
     use_pypy: bool = False,
+    pre_job_bash: str = "",
+    post_job_bash: str = "",
+    times_to_retry_job: int = 0,
 ) -> DependencyNode:
     """
     Schedule a job to run the given *python_module* on the given *parameters*.
@@ -85,6 +88,9 @@ def run_python_on_parameters(
         category=category,
         use_pypy=use_pypy,
         container=container,
+        pre_job_bash=pre_job_bash,
+        post_job_bash=post_job_bash,
+        times_to_retry_job=times_to_retry_job,
     )
 
 
@@ -94,6 +100,49 @@ def limit_jobs_for_category(category: str, max_jobs: int):
     """
     _assert_singleton_workflow_builder()
     return _SINGLETON_WORKFLOW_BUILDER.limit_jobs_for_category(category, max_jobs)
+
+
+def run_python_on_args(
+    job_name: Locator,
+    python_module_or_path: Any,
+    set_args: str,
+    *,
+    depends_on,
+    resource_request: Optional[ResourceRequest] = None,
+    override_conda_config: Optional[CondaConfiguration] = None,
+    category: Optional[str] = None,
+    use_pypy: bool = False,
+    job_is_stageable: bool = False,
+    job_bypass_staging: bool = False,
+    pre_job_bash: str = "",
+    post_job_bash: str = "",
+    times_to_retry_job: int = 0,
+) -> DependencyNode:
+    """
+    Schedule a job to run the given *python_script* with the given *set_args*.
+
+    If this job requires other jobs to be executed first,
+    include them in *depends_on*.
+
+    This method returns a `DependencyNode` which can be used in *depends_on*
+    for future jobs.
+    """
+    _assert_singleton_workflow_builder()
+    return _SINGLETON_WORKFLOW_BUILDER.run_python_on_args(
+        job_name=job_name,
+        python_module_or_path=python_module_or_path,
+        set_args=set_args,
+        depends_on=depends_on,
+        resource_request=resource_request,
+        override_conda_config=override_conda_config,
+        category=category,
+        use_pypy=use_pypy,
+        job_is_stageable=job_is_stageable,
+        job_bypass_staging=job_bypass_staging,
+        pre_job_bash=pre_job_bash,
+        post_job_bash=post_job_bash,
+        times_to_retry_job=times_to_retry_job,
+    )
 
 
 def default_conda_configuration() -> CondaConfiguration:
