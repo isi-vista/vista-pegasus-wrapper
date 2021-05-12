@@ -28,6 +28,12 @@ class Locator:
 
     _parts: Tuple[str] = attrib(converter=_parse_parts)
 
+    @_parts.validator
+    def _validate_parts(self, _attr, parts):
+        if any("=" in part for part in parts):
+            # Pegasus uses HTCondor which can't handle = in job names, so we forbid them to avoid confusion
+            raise ValueError(f"Can't handle locator path containing =: `{parts}`.")
+
     def __truediv__(self, other: Union[str, "Locator"]):
         if isinstance(other, Locator):
             return Locator(
