@@ -55,6 +55,10 @@ def test_locator():
     with pytest.raises(RuntimeError):
         _ = combined / 90
 
+    # Confirm we can't create a locator with an equals sign in the name
+    with pytest.raises(ValueError):
+        _ = Locator(_parse_parts("x=20"))
+
 
 def test_dax_with_job_on_saga(tmp_path):
     workflow_params = Parameters.from_mapping(
