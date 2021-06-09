@@ -19,6 +19,7 @@ from vistautils.parameters import Parameters, YAMLParametersWriter
 
 from pegasus_wrapper.artifact import DependencyNode, _canonicalize_depends_on
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
+from pegasus_wrapper.pegasus_profile import PegasusProfile
 from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.pegasus_utils import (
     add_local_nas_to_sites,
@@ -212,6 +213,7 @@ class WorkflowBuilder:
         job_is_stageable: bool = False,
         job_bypass_staging: bool = False,
         times_to_retry_job: int = 0,
+        job_profiles: Optional[List[PegasusProfile]] = None,
         treat_params_as_cmd_args: bool = False,
     ) -> DependencyNode:
         """
@@ -290,6 +292,10 @@ class WorkflowBuilder:
 
         job.add_dagman_profile(category=category, retry=str(times_to_retry_job))
 
+        if job_profiles:
+            for profile in job_profiles:
+                job.add_profiles(profile.namespace, key=profile.key, value=profile.value)
+
         resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
 
         # Handle Output Files
@@ -328,6 +334,7 @@ class WorkflowBuilder:
         job_is_stageable: bool = False,
         job_bypass_staging: bool = False,
         times_to_retry_job: int = 0,
+        job_profiles: Optional[List[PegasusProfile]] = None,
     ) -> DependencyNode:
         """
         Schedule a job to run the given *python_module* on the given *parameters*.
@@ -358,6 +365,7 @@ class WorkflowBuilder:
             job_is_stageable=job_is_stageable,
             job_bypass_staging=job_bypass_staging,
             times_to_retry_job=times_to_retry_job,
+            job_profiles=job_profiles,
         )
 
     def run_python_on_args(
@@ -377,6 +385,7 @@ class WorkflowBuilder:
         post_job_bash: str = "",
         times_to_retry_job: int = 0,
         container: Optional[Container] = None,
+        job_profiles: Optional[List[PegasusProfile]] = None,
     ) -> DependencyNode:
         """
         Schedule a job to run the given *python_script* with the given *set_args*.
@@ -407,6 +416,7 @@ class WorkflowBuilder:
             job_is_stageable=job_is_stageable,
             job_bypass_staging=job_bypass_staging,
             times_to_retry_job=times_to_retry_job,
+            job_profiles=job_profiles,
             treat_params_as_cmd_args=True,
         )
 
