@@ -11,6 +11,7 @@ from pegasus_wrapper import (
     write_workflow_description,
 )
 from pegasus_wrapper.artifact import ValueArtifact
+from pegasus_wrapper.pegasus_profile import PegasusProfile
 from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.scripts import multiply_by_x, sort_nums_in_file
@@ -99,12 +100,19 @@ def example_workflow(params: Parameters):  # pragma: no cover
         locator=Locator("multiply"),
     )
 
+    job_profile = PegasusProfile(
+        namespace="pegasus",
+        key="transfer.bypass.input.staging",
+        value="True",
+    )
+
     run_python_on_parameters(
         job_locator / "sort",
         sort_nums_in_file,
         {"input_file": multiply_output_file, "output_file": sorted_output_file},
         depends_on=[multiply_artifact],
         container="python3.6",
+        job_profiles=[job_profile],
         resource_request=saga31_request
         # if you want to use a different resource for some task, you can do this way
         # resource_request=SlurmResourceRequest.from_parameters(slurm_params),

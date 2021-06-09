@@ -20,6 +20,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Union
 from vistautils.parameters import Parameters
 
 from pegasus_wrapper.artifact import DependencyNode
+from pegasus_wrapper.pegasus_profile import PegasusProfile
 from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.resource_request import ResourceRequest
 from pegasus_wrapper.version import version as __version__  # noqa
@@ -67,6 +68,7 @@ def run_python_on_parameters(
     pre_job_bash: str = "",
     post_job_bash: str = "",
     times_to_retry_job: int = 0,
+    job_profiles: Optional[List[PegasusProfile]] = None,
 ) -> DependencyNode:
     """
     Schedule a job to run the given *python_module* on the given *parameters*.
@@ -91,6 +93,7 @@ def run_python_on_parameters(
         pre_job_bash=pre_job_bash,
         post_job_bash=post_job_bash,
         times_to_retry_job=times_to_retry_job,
+        job_profiles=job_profiles,
     )
 
 
@@ -117,6 +120,7 @@ def run_python_on_args(
     pre_job_bash: str = "",
     post_job_bash: str = "",
     times_to_retry_job: int = 0,
+    job_profiles: Optional[List[PegasusProfile]] = None,
 ) -> DependencyNode:
     """
     Schedule a job to run the given *python_script* with the given *set_args*.
@@ -142,6 +146,7 @@ def run_python_on_args(
         pre_job_bash=pre_job_bash,
         post_job_bash=post_job_bash,
         times_to_retry_job=times_to_retry_job,
+        job_profiles=job_profiles,
     )
 
 
