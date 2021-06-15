@@ -71,6 +71,7 @@ class WorkflowBuilder:
     created_by: str = attrib(validator=instance_of(str), kw_only=True)
     _workflow_directory: Path = attrib(validator=instance_of(Path), kw_only=True)
     _namespace: str = attrib(validator=instance_of(str), kw_only=True)
+    _data_configuration: str = attrib(validator=instance_of(str), kw_only=True)
     _default_site: str = attrib(validator=instance_of(str), kw_only=True)
     default_resource_request: ResourceRequest = attrib(
         validator=instance_of(ResourceRequest), kw_only=True
@@ -132,6 +133,7 @@ class WorkflowBuilder:
             docker_script_generator=DockerJobScriptGenerator.from_parameters(params),
             namespace=params.string("namespace"),
             default_resource_request=ResourceRequest.from_parameters(params),
+            data_configuration=params.string("data_configuration", default="sharedfs"),
             experiment_name=params.string("experiment_name", default=""),
         )
 
