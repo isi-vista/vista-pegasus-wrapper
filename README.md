@@ -46,6 +46,8 @@ A [Nuke Checkpoints](scripts/nuke_checkpoints.py) script is provided for ease of
 
 It is recommended to use a shared directory on the NAS, e.g. `/nas/gaia` to host a workflow under as compared to a users `/nas/user/xyz` home directory due to space limitations on the NAS.
 
+Currently, all workflows will run in the `sharedfs` data staging configuration.
+
 # FAQ
 ## How can I exclude some nodes?
 
