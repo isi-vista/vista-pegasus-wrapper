@@ -1,8 +1,9 @@
-from Pegasus.api import Namespace
-
 from attr import attrib, attrs
 from attr.validators import instance_of
+
 from immutablecollections import immutabledict
+
+from Pegasus.api import Namespace
 
 _STR_TO_NAMESPACE = immutabledict(
     {
@@ -23,7 +24,7 @@ def _get_namespace(str_namespace: str) -> Namespace:
 @attrs(slots=True, frozen=True, repr=False)
 class PegasusProfile:
     r"""
-    A `JobProfile` is a profile that can be added to a Pegasus job.
+    A `PegasusProfile` is a profile that can be added to e.g. a Pegasus job.
     """
 
     namespace: Namespace = attrib(converter=_get_namespace)
