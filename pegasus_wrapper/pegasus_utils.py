@@ -62,6 +62,7 @@ def add_saga_cluster_to_sites(
     sites_catalog: SiteCatalog, params: Parameters = Parameters.empty()
 ) -> None:
     home = params.string("home_dir", default=str(Path.home().absolute()))
+    data_configuration = params.string("data_configuration", default="sharedfs")
 
     shared_scratch_dir = params.string(
         "saga_shared_scratch", default=f"{home}/workflows/shared-scratch"
@@ -80,7 +81,7 @@ def add_saga_cluster_to_sites(
 
     # Profiles
     saga.add_pegasus_profile(
-        style="glite", auxillary_local=True, data_configuration="sharedfs"
+        style="glite", auxillary_local=True, data_configuration=data_configuration
     )
     saga.add_condor_profile(grid_resource="batch slurm")
 

@@ -11,8 +11,8 @@ from pegasus_wrapper import (
     write_workflow_description,
 )
 from pegasus_wrapper.artifact import ValueArtifact
-from pegasus_wrapper.pegasus_profile import PegasusProfile
 from pegasus_wrapper.locator import Locator
+from pegasus_wrapper.pegasus_profile import PegasusProfile
 from pegasus_wrapper.resource_request import SlurmResourceRequest
 from pegasus_wrapper.scripts import multiply_by_x, sort_nums_in_file
 
@@ -101,9 +101,7 @@ def example_workflow(params: Parameters):  # pragma: no cover
     )
 
     job_profile = PegasusProfile(
-        namespace="pegasus",
-        key="transfer.bypass.input.staging",
-        value="True",
+        namespace="pegasus", key="transfer.bypass.input.staging", value="True"
     )
 
     run_python_on_parameters(

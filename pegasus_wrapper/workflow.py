@@ -19,8 +19,9 @@ from vistautils.parameters import Parameters, YAMLParametersWriter
 
 from pegasus_wrapper.artifact import DependencyNode, _canonicalize_depends_on
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
-from pegasus_wrapper.pegasus_profile import PegasusProfile
+from pegasus_wrapper.docker_job_script import DockerJobScriptGenerator
 from pegasus_wrapper.locator import Locator
+from pegasus_wrapper.pegasus_profile import PegasusProfile
 from pegasus_wrapper.pegasus_utils import (
     add_local_nas_to_sites,
     add_saga_cluster_to_sites,
@@ -70,12 +71,18 @@ class WorkflowBuilder:
     created_by: str = attrib(validator=instance_of(str), kw_only=True)
     _workflow_directory: Path = attrib(validator=instance_of(Path), kw_only=True)
     _namespace: str = attrib(validator=instance_of(str), kw_only=True)
+    _data_configuration: str = attrib(validator=instance_of(str), kw_only=True)
     _default_site: str = attrib(validator=instance_of(str), kw_only=True)
     default_resource_request: ResourceRequest = attrib(
         validator=instance_of(ResourceRequest), kw_only=True
     )
     _conda_script_generator: Optional[CondaJobScriptGenerator] = attrib(
         validator=optional(instance_of(CondaJobScriptGenerator)),
+        default=None,
+        kw_only=True,
+    )
+    _docker_script_generator: Optional[DockerJobScriptGenerator] = attrib(
+        validator=optional(instance_of(DockerJobScriptGenerator)),
         default=None,
         kw_only=True,
     )
@@ -123,8 +130,10 @@ class WorkflowBuilder:
             workflow_directory=params.creatable_directory("workflow_directory"),
             default_site=params.string("site"),
             conda_script_generator=CondaJobScriptGenerator.from_parameters(params),
+            docker_script_generator=DockerJobScriptGenerator.from_parameters(params),
             namespace=params.string("namespace"),
             default_resource_request=ResourceRequest.from_parameters(params),
+            data_configuration=params.string("data_configuration", default="sharedfs"),
             experiment_name=params.string("experiment_name", default=""),
         )
 
@@ -315,6 +324,106 @@ class WorkflowBuilder:
         self._signature_to_job[signature] = dependency_node
 
         logging.info("Scheduled Python job %s", job_name)
+        return dependency_node
+
+    def run_container(
+        self,
+        job_name: Locator,
+        docker_image_name: str,
+        container: Container,
+        cmd_args: str,
+        executable: str,
+        *,
+        depends_on,
+        resource_request: Optional[ResourceRequest] = None,
+        category: Optional[str] = None,
+        pre_job_bash: str = "",
+        post_job_bash: str = "",
+        job_is_stageable: bool = False,
+        job_bypass_staging: bool = False,
+        installed_script: str = None,
+        times_to_retry_job: int = 0,
+        job_profiles: Optional[List[PegasusProfile]] = None,
+    ) -> DependencyNode:
+
+        job_dir = self.directory_for(job_name)
+        ckpt_name = job_name / "___ckpt"
+        checkpoint_path = job_dir / "___ckpt"
+        depends_on = _canonicalize_depends_on(depends_on)
+
+        signature = (docker_image_name, cmd_args)
+        if signature in self._signature_to_job:
+            logging.info("Job %s recognized as a duplicate", job_name)
+            return self._signature_to_job[signature]
+
+        # script_path = job_dir / "___run.sh"
+        # stdout_path = job_dir / "___stdout.log"
+
+        # Part of one strategy to run a container through a bash script
+        # self._docker_script_generator.write_shell_script_to(
+        #     docker_image_name=docker_image_name,
+        #     working_directory=job_dir,
+        #     script_path=script_path,
+        #     cmd_args=cmd_args,
+        #     stdout_file=stdout_path,
+        #     ckpt_path=checkpoint_path,
+        #     pre_job=pre_job_bash,
+        #     post_job=post_job_bash,
+        # )
+
+        script_executable = Transformation(
+            self._job_name_for(job_name),
+            namespace=self._namespace,
+            version="4.0",
+            site=self._default_site,
+            pfn=executable,
+            is_stageable=job_is_stageable,
+            bypass_staging=job_bypass_staging,
+            arch=Arch.X86_64,
+            os_type=OS.LINUX,
+            container=container,
+        )
+
+        self._transformation_catalog.add_transformations(script_executable)
+
+        job = Job(script_executable)
+        self._job_graph.add_jobs(job)
+        for parent_dependency in depends_on:
+            if parent_dependency.job:
+                self._job_graph.add_dependency(job, parents=[parent_dependency.job])
+            for out_file in parent_dependency.output_files:
+                job.add_inputs(out_file)
+
+        resource_request = self.set_resource_request(resource_request)
+
+        job.add_dagman_profile(category=category, retry=str(times_to_retry_job))
+
+        if job_profiles:
+            for profile in job_profiles:
+                job.add_profiles(profile.namespace, key=profile.key, value=profile.value)
+
+        if installed_script:
+            job.add_args(f" {installed_script}")
+
+        resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
+
+        # Handle Output Files
+        # This is currently only handled as the checkpoint file
+        # See: https://github.com/isi-vista/vista-pegasus-wrapper/issues/25
+        # If the checkpoint file already exists, we want to add it to the replica catalog
+        # so that we don't run the job corresponding to the checkpoint file again
+        checkpoint_pegasus_file = self.create_file(
+            f"{ckpt_name}", checkpoint_path, add_to_catalog=checkpoint_path.exists()
+        )
+
+        job.add_outputs(checkpoint_pegasus_file, stage_out=False)
+
+        dependency_node = DependencyNode.from_job(
+            job, output_files=[checkpoint_pegasus_file]
+        )
+        self._signature_to_job[signature] = dependency_node
+
+        logging.info("Scheduled Docker job %s", job_name)
         return dependency_node
 
     def run_python_on_parameters(

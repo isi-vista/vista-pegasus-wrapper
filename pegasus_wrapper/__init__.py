@@ -20,8 +20,8 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Union
 from vistautils.parameters import Parameters
 
 from pegasus_wrapper.artifact import DependencyNode
-from pegasus_wrapper.pegasus_profile import PegasusProfile
 from pegasus_wrapper.locator import Locator
+from pegasus_wrapper.pegasus_profile import PegasusProfile
 from pegasus_wrapper.resource_request import ResourceRequest
 from pegasus_wrapper.version import version as __version__  # noqa
 from pegasus_wrapper.workflow import WorkflowBuilder
@@ -145,6 +145,44 @@ def run_python_on_args(
         job_bypass_staging=job_bypass_staging,
         pre_job_bash=pre_job_bash,
         post_job_bash=post_job_bash,
+        times_to_retry_job=times_to_retry_job,
+        job_profiles=job_profiles,
+    )
+
+
+def run_container(
+    job_name: Locator,
+    docker_image_name: str,
+    container: Container,
+    cmd_args: str,
+    executable: str,
+    *,
+    depends_on,
+    resource_request: Optional[ResourceRequest] = None,
+    category: Optional[str] = None,
+    pre_job_bash: str = "",
+    post_job_bash: str = "",
+    job_is_stageable: bool = False,
+    job_bypass_staging: bool = False,
+    installed_script: str = None,
+    times_to_retry_job: int = 0,
+    job_profiles: Optional[List[PegasusProfile]] = None,
+) -> DependencyNode:
+    _assert_singleton_workflow_builder()
+    return _SINGLETON_WORKFLOW_BUILDER.run_container(
+        job_name=job_name,
+        docker_image_name=docker_image_name,
+        container=container,
+        cmd_args=cmd_args,
+        executable=executable,
+        depends_on=depends_on,
+        resource_request=resource_request,
+        category=category,
+        job_is_stageable=job_is_stageable,
+        job_bypass_staging=job_bypass_staging,
+        pre_job_bash=pre_job_bash,
+        post_job_bash=post_job_bash,
+        installed_script=installed_script,
         times_to_retry_job=times_to_retry_job,
         job_profiles=job_profiles,
     )
