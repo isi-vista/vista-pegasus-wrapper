@@ -63,7 +63,7 @@ def run_python_on_parameters(
     resource_request: Optional[ResourceRequest] = None,
     override_conda_config: Optional[CondaConfiguration] = None,
     category: Optional[str] = None,
-    container=None,
+    container: Optional[Container] = None,
     use_pypy: bool = False,
     pre_job_bash: str = "",
     post_job_bash: str = "",
@@ -121,6 +121,7 @@ def run_python_on_args(
     post_job_bash: str = "",
     times_to_retry_job: int = 0,
     job_profiles: Optional[List[PegasusProfile]] = None,
+    container: Optional[Container] = None,
 ) -> DependencyNode:
     """
     Schedule a job to run the given *python_script* with the given *set_args*.
@@ -147,15 +148,15 @@ def run_python_on_args(
         post_job_bash=post_job_bash,
         times_to_retry_job=times_to_retry_job,
         job_profiles=job_profiles,
+        container=container,
     )
 
 
 def run_container(
     job_name: Locator,
     docker_image_name: str,
-    container: Container,
-    cmd_args: str,
-    executable: str,
+    docker_args: str,
+    docker_run_comand: str,
     *,
     depends_on,
     resource_request: Optional[ResourceRequest] = None,
@@ -164,7 +165,6 @@ def run_container(
     post_job_bash: str = "",
     job_is_stageable: bool = False,
     job_bypass_staging: bool = False,
-    installed_script: str = None,
     times_to_retry_job: int = 0,
     job_profiles: Optional[List[PegasusProfile]] = None,
 ) -> DependencyNode:
@@ -172,9 +172,8 @@ def run_container(
     return _SINGLETON_WORKFLOW_BUILDER.run_container(
         job_name=job_name,
         docker_image_name=docker_image_name,
-        container=container,
-        cmd_args=cmd_args,
-        executable=executable,
+        docker_args=docker_args,
+        docker_run_comand=docker_run_comand,
         depends_on=depends_on,
         resource_request=resource_request,
         category=category,
@@ -182,7 +181,6 @@ def run_container(
         job_bypass_staging=job_bypass_staging,
         pre_job_bash=pre_job_bash,
         post_job_bash=post_job_bash,
-        installed_script=installed_script,
         times_to_retry_job=times_to_retry_job,
         job_profiles=job_profiles,
     )
@@ -209,6 +207,8 @@ def add_container(
     checksum: Optional[Mapping[str, str]] = None,
     metadata: Optional[Mapping[str, Union[float, int, str]]] = None,
     bypass_staging: bool = False,
+    resource_request: Optional[ResourceRequest] = None,
+    configure_as_service: bool = False,
 ) -> Container:
     _assert_singleton_workflow_builder()
     return _SINGLETON_WORKFLOW_BUILDER.add_container(
@@ -221,6 +221,38 @@ def add_container(
         checksum=checksum,
         metadata=metadata,
         bypass_staging=bypass_staging,
+        resource_request=resource_request,
+        configure_as_service=configure_as_service,
+    )
+
+
+def run_bash(
+    job_name: str,
+    command: Union[Iterable[str], str],
+    *,
+    depends_on,
+    resource_request: Optional[ResourceRequest] = None,
+    category: Optional[str] = None,
+    job_is_stageable: bool = False,
+    job_bypass_staging: bool = False,
+    times_to_retry_job: int = 0,
+    job_profiles: Optional[List[PegasusProfile]] = None,
+    container: Optional[Container] = None,
+    path_to_bash: Path = Path("/usr/bin/bash"),
+) -> DependencyNode:
+    _assert_singleton_workflow_builder()
+    return _SINGLETON_WORKFLOW_BUILDER.run_bash(
+        job_name,
+        command,
+        depends_on=depends_on,
+        resource_request=resource_request,
+        category=category,
+        job_is_stageable=job_is_stageable,
+        job_bypass_staging=job_bypass_staging,
+        times_to_retry_job=times_to_retry_job,
+        job_profiles=job_profiles,
+        container=container,
+        path_to_bash=path_to_bash,
     )
 
 

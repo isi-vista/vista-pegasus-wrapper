@@ -12,13 +12,13 @@ def main():
     parser.add_argument("--y", help="Y value to add to each entry in the input file path")
 
     args = parser.parse_args()
-    logging.info("Reading from input file: %s", str(args.input_file.absolute()))
-    with args.input_file.open() as input_f:
-        with args.output_file.open("w") as output_f:
+    logging.info("Reading from input file: %s", str(args.input_file))
+    with open(args.input_file) as input_f:
+        with open(args.output_file, "w") as output_f:
             for num in input_f:
-                output_f.write(f"{int(num)+args.y}\n")
+                output_f.write(f"{int(num)+int(args.y)}\n")
 
-    logging.info("Writing to output file: %s", str(args.output_file.absolute()))
+    logging.info("Writing to output file: %s", str(args.output_file))
 
     # Pause so that we can examine the job on the SAGA cluster
     time.sleep(10)

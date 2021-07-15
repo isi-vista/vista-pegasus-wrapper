@@ -7,12 +7,12 @@ and should instead use the methods in the root of the package.
 import logging
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Set, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Union
 
 from attr import attrib, attrs
 from attr.validators import instance_of, optional
 
-from immutablecollections import immutabledict
+from immutablecollections import immutabledict, immutableset
 from vistautils.class_utils import fully_qualified_name
 from vistautils.io_utils import CharSink
 from vistautils.parameters import Parameters, YAMLParametersWriter
@@ -22,6 +22,7 @@ from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
 from pegasus_wrapper.docker_job_script import DockerJobScriptGenerator
 from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.pegasus_profile import PegasusProfile
+from pegasus_wrapper.pegasus_transformation import PegasusTransformation
 from pegasus_wrapper.pegasus_utils import (
     add_local_nas_to_sites,
     add_saga_cluster_to_sites,
@@ -118,7 +119,12 @@ class WorkflowBuilder:
     _lfn_to_file: Dict[str, File] = attrib(kw_only=True, factory=dict)
     # Track created transformation so that if we go to make a duplicate
     # we instead return the one we already made
-    _transformation_name_to_transformation: Dict[str, Transformation] = attrib(
+    _transformation_name_to_transformations: Dict[
+        str, List[PegasusTransformation]
+    ] = attrib(kw_only=True, factory=dict)
+    # In order to use docker images as a service during a workflow we need
+    # to be able to configure the dependent jobs when we go to write-out the workflow
+    _container_to_start_stop_job: Dict[Container, Tuple[Job, Job]] = attrib(
         kw_only=True, factory=dict
     )
 
@@ -204,6 +210,51 @@ class WorkflowBuilder:
                 f"this file did not already exist."
             )
         return self._lfn_to_file[logical_file_name]
+
+    def _define_transformation(
+        self,
+        name: str,
+        pfn: str,
+        *,
+        namespace: Optional[str] = None,
+        version: Optional[str] = None,
+        site: Optional[str] = None,
+        is_stageable: bool = False,
+        bypass_staging: bool = True,
+        container: Optional[Container] = None,
+        arch: Optional[Arch] = None,
+        os_type: Optional[OS] = None,
+    ) -> PegasusTransformation:
+        # Try to see if we have the target transformation already made
+        if name in self._transformation_name_to_transformations:
+            for transformation in self._transformation_name_to_transformations[name]:
+                if transformation.container == container:
+                    return transformation
+        # Otherwise make the transformation and return it
+        transform = Transformation(
+            name,
+            namespace,
+            version,
+            site if site is not None else self._default_site,
+            pfn,
+            is_stageable=is_stageable,
+            bypass_staging=bypass_staging,
+            container=container,
+            arch=arch,
+            os_type=os_type,
+        )
+
+        self._transformation_catalog.add_transformations(transform)
+
+        peg_transform = PegasusTransformation(
+            name=name, transformation=transform, container=container
+        )
+
+        if name not in self._transformation_name_to_transformations:
+            self._transformation_name_to_transformations[name] = list()
+
+        self._transformation_name_to_transformations[name].append(peg_transform)
+        return peg_transform
 
     def _run_python_job(
         self,
@@ -330,9 +381,8 @@ class WorkflowBuilder:
         self,
         job_name: Locator,
         docker_image_name: str,
-        container: Container,
-        cmd_args: str,
-        executable: str,
+        docker_args: str,
+        docker_run_comand: str,
         *,
         depends_on,
         resource_request: Optional[ResourceRequest] = None,
@@ -340,8 +390,7 @@ class WorkflowBuilder:
         pre_job_bash: str = "",
         post_job_bash: str = "",
         job_is_stageable: bool = False,
-        job_bypass_staging: bool = False,
-        installed_script: str = None,
+        job_bypass_staging: bool = True,
         times_to_retry_job: int = 0,
         job_profiles: Optional[List[PegasusProfile]] = None,
     ) -> DependencyNode:
@@ -351,37 +400,43 @@ class WorkflowBuilder:
         checkpoint_path = job_dir / "___ckpt"
         depends_on = _canonicalize_depends_on(depends_on)
 
-        signature = (docker_image_name, cmd_args)
+        signature = (docker_image_name, docker_args)
         if signature in self._signature_to_job:
             logging.info("Job %s recognized as a duplicate", job_name)
             return self._signature_to_job[signature]
 
-        # script_path = job_dir / "___run.sh"
-        # stdout_path = job_dir / "___stdout.log"
+        script_path = job_dir / "___run.sh"
+        stdout_path = job_dir / "___stdout.log"
+
+        # Generate copy commands to relocate files from NAS to scratch
+        # Or from Scratch to NAS at start and end of docker container job
+        # TODO: Automatic file staging into and out of local scratch mounts
 
         # Part of one strategy to run a container through a bash script
-        # self._docker_script_generator.write_shell_script_to(
-        #     docker_image_name=docker_image_name,
-        #     working_directory=job_dir,
-        #     script_path=script_path,
-        #     cmd_args=cmd_args,
-        #     stdout_file=stdout_path,
-        #     ckpt_path=checkpoint_path,
-        #     pre_job=pre_job_bash,
-        #     post_job=post_job_bash,
-        # )
+        self._docker_script_generator.write_shell_script_to(
+            docker_image_name=docker_image_name,
+            docker_command=docker_run_comand,
+            working_directory=job_dir,
+            script_path=script_path,
+            cmd_args=docker_args,
+            stdout_file=stdout_path,
+            ckpt_path=checkpoint_path,
+            pre_job=pre_job_bash,
+            post_job=post_job_bash,
+        )
 
+        # TODO - Refactor this so it uses the BASH transformation to form a job
+        # With the script path as an argument
         script_executable = Transformation(
             self._job_name_for(job_name),
             namespace=self._namespace,
             version="4.0",
             site=self._default_site,
-            pfn=executable,
+            pfn=script_path,
             is_stageable=job_is_stageable,
             bypass_staging=job_bypass_staging,
             arch=Arch.X86_64,
             os_type=OS.LINUX,
-            container=container,
         )
 
         self._transformation_catalog.add_transformations(script_executable)
@@ -401,9 +456,6 @@ class WorkflowBuilder:
         if job_profiles:
             for profile in job_profiles:
                 job.add_profiles(profile.namespace, key=profile.key, value=profile.value)
-
-        if installed_script:
-            job.add_args(f" {installed_script}")
 
         resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
 
@@ -529,6 +581,97 @@ class WorkflowBuilder:
             treat_params_as_cmd_args=True,
         )
 
+    def run_bash(
+        self,
+        job_name: Locator,
+        command: Union[Iterable[str], str],
+        *,
+        depends_on,
+        resource_request: Optional[ResourceRequest] = None,
+        category: Optional[str] = None,
+        job_is_stageable: bool = False,
+        job_bypass_staging: bool = False,
+        times_to_retry_job: int = 0,
+        job_profiles: Optional[List[PegasusProfile]] = None,
+        container: Optional[Container] = None,
+        path_to_bash: Path = Path("/usr/bin/bash"),
+    ) -> DependencyNode:
+        """
+        Schedule a job to run the given *command* with the given *resource_request*
+
+        If this job requires other jobs to be executed first,
+        include them in *depends_on*.
+
+        This method returns a `DependencyNode` which can be used in *depends_on*
+        for future jobs.
+        """
+        if job_profiles is None:
+            job_profiles = []
+
+        if isinstance(command, str):
+            command = [command]
+
+        commands_hashable = immutableset(command)
+
+        signature = (job_name, commands_hashable)
+        if signature in self._signature_to_job:
+            logging.info("Job %s recognized as duplicate", job_name)
+            return self._signature_to_job[signature]
+
+        bash_transform = self._define_transformation(
+            "bash",
+            str(path_to_bash.absolute()),
+            site=self._default_site,
+            container=container,
+            is_stageable=job_is_stageable,
+            bypass_staging=job_bypass_staging,
+        ).transformation
+
+        job_dir = self.directory_for(job_name)
+        ckpt_name = job_name / "___ckpt"
+        ckpt_path = job_dir / "___ckpt"
+        job_script = job_dir / "script.sh"
+
+        commands_with_ckpt = list(command)
+        commands_with_ckpt.append(f"touch {ckpt_path.absolute()}")
+
+        job_script.write_text("\n".join(commands_with_ckpt))
+
+        bash_job = Job(bash_transform)
+        bash_job.add_args(str(job_script.absolute()))
+        bash_job.add_dagman_profile(category=category, retry=str(times_to_retry_job))
+
+        for profile in job_profiles:
+            bash_job.add_profiles(profile.namespace, key=profile.key, value=profile.value)
+
+        resource_request = self.set_resource_request(resource_request)
+        resource_request.apply_to_job(bash_job, job_name=self._job_name_for(job_name))
+
+        self._job_graph.add_jobs(bash_job)
+        for parent_dependency in depends_on:
+            if parent_dependency.job:
+                self._job_graph.add_dependency(bash_job, parents=[parent_dependency.job])
+            for out_file in parent_dependency.output_files:
+                bash_job.add_inputs(out_file)
+
+        # Handle Output Files
+        # This is currently only handled as the checkpoint file
+        # See: https://github.com/isi-vista/vista-pegasus-wrapper/issues/25
+        # If the checkpoint file already exists, we want to add it to the replica catalog
+        # so that we don't run the job corresponding to the checkpoint file again
+        checkpoint_pegasus_file = self.create_file(
+            self._job_name_for(ckpt_name), ckpt_path, add_to_catalog=ckpt_path.exists()
+        )
+
+        bash_job.add_outputs(checkpoint_pegasus_file, stage_out=False)
+
+        dependency_node = DependencyNode.from_job(bash_job, output_files=None)
+
+        self._signature_to_job[signature] = dependency_node
+        logging.info("Scheduled bash job %s", job_name)
+
+        return dependency_node
+
     def add_container(
         self,
         container_name: str,
@@ -541,6 +684,8 @@ class WorkflowBuilder:
         checksum: Optional[Mapping[str, str]] = None,
         metadata: Optional[Mapping[str, Union[float, int, str]]] = None,
         bypass_staging: bool = False,
+        resource_request: Optional[ResourceRequest] = None,
+        configure_as_service: bool = False,
     ) -> Container:
         """
         Add a container to the transformation catalog, to be used on a Job request
@@ -559,15 +704,56 @@ class WorkflowBuilder:
             container_name,
             container_type=_STR_TO_CONTAINER_TYPE[container_type],
             image=str(image.absolute()) if isinstance(image, Path) else image,
-            arguments=arguments,
-            mounts=mounts,
-            image_site=image_site,
+            arguments=arguments if not configure_as_service else None,
+            mounts=mounts if not configure_as_service else None,
+            image_site=image_site if image_site is None else self._default_site,
             checksum=immutabledict(checksum) if checksum else None,
             metadata=immutabledict(metadata) if metadata else None,
             bypass_staging=bypass_staging,
         )
 
         self._transformation_catalog.add_containers(container)
+
+        if (
+            configure_as_service
+            and _STR_TO_CONTAINER_TYPE[container_type] == Container.DOCKER
+        ):
+            container_loc = Locator(["container", container_name])
+            container_dir = self.directory_for(container_loc)
+            container_start_path = container_dir / "start.sh"
+            container_stop_path = container_dir / "stop.sh"
+
+            arguments_with_mounts = " -v ".join(mounts)
+
+            if arguments:
+                arguments_with_mounts = arguments + arguments_with_mounts
+
+            self._docker_script_generator.write_service_shell_script_to(
+                container_name,
+                docker_image_path=str(image.absolute())
+                if isinstance(image, Path)
+                else image,
+                docker_args=arguments_with_mounts,
+                start_script_path=container_start_path,
+                stop_script_path=container_stop_path,
+            )
+
+            start = self.run_bash(
+                container_loc / "start",
+                str(container_start_path.absolute()),
+                resource_request=resource_request,
+                depends_on=[],
+            )
+
+            stop = self.run_bash(
+                container_loc / "stop",
+                str(container_stop_path.absolute()),
+                resource_request=resource_request,
+                depends_on=[],
+            )
+
+            self._container_to_start_stop_job[container] = (start, stop)
+
         return container
 
     def set_resource_request(self, resource_request: ResourceRequest):

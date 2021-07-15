@@ -14,28 +14,6 @@ from saga_tools.conda import CondaConfiguration
 from saga_tools.spack import SpackConfiguration
 
 
-def main(params: Parameters):  # pragma: no cover
-    conda_script_generator = CondaJobScriptGenerator.from_parameters(params)
-    entry_point = params.string("entry_point")
-    work_dir = params.optional_creatable_directory("working_directory") or Path(
-        os.getcwd()
-    )
-    stdout_file = params.string("log_file") or work_dir / "___stdout.log"
-    shell_script = conda_script_generator.generate_shell_script(
-        entry_point_name=entry_point,
-        param_file=params.existing_file("job_param_file"),
-        working_directory=work_dir,
-        stdout_file=stdout_file,
-    )
-
-    params.creatable_file("conda_script_path").write_text(  # type: ignore
-        shell_script, encoding="utf-8"
-    )
-
-    if params.boolean("echo_template", default=False):
-        print(shell_script)
-
-
 @attrs(frozen=True, slots=True)
 class CondaJobScriptGenerator:
     """
@@ -238,6 +216,3 @@ PYTHON_JOB = """echo `which {python}`
 echo {python} {path_or_entry_point} {param_file_or_args}
 {python} {path_or_entry_point} {param_file_or_args} 2>&1 | tee {stdout_file}
 """
-
-if __name__ == "__main__":  # pragma: no cover
-    parameters_only_entry_point(main)
