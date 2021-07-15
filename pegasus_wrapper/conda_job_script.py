@@ -228,16 +228,13 @@ fi
 {conda_lines}
 {spack_lines}
 cd {working_directory}
-echo `which python`
 {pre_job}
-echo {python_job}
 {python_job}
 {post_job}
 {ckpt_line}
 """
 
-PYTHON_JOB = """
-echo `which {python}`
+PYTHON_JOB = """echo `which {python}`
 echo {python} {path_or_entry_point} {param_file_or_args}
 {python} {path_or_entry_point} {param_file_or_args} 2>&1 | tee {stdout_file}
 """
