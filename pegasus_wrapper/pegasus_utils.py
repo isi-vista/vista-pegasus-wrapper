@@ -22,9 +22,8 @@ pegasus-plan \\
     --conf pegasus.properties \\
     --dir {workflow_directory} \\
     --cleanup leaf \\
-    --force \\
-    --sites saga \\
-    --output-site local \\
+    -s saga \\
+    -o local \\
     --submit
 """
 
