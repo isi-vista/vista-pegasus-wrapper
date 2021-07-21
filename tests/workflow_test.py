@@ -1,16 +1,21 @@
+from pathlib import Path
 from random import Random
 
 from immutablecollections import immutableset
 from vistautils.parameters import Parameters
 
 from pegasus_wrapper import (
+    PegasusProfile,
     add_container,
     directory_for,
     experiment_directory,
     initialize_vista_pegasus_wrapper,
     limit_jobs_for_category,
+    run_bash,
     run_python_on_args,
     run_python_on_parameters,
+    start_docker_as_service,
+    stop_docker_as_service,
     write_workflow_description,
 )
 from pegasus_wrapper.artifact import ValueArtifact
@@ -722,6 +727,9 @@ def test_dax_with_job_on_saga_with_dict_as_params(tmp_path):
 
     add_args = f"{sorted_output_file} {add_output_file} --y 10"
 
+    job_profile = PegasusProfile(
+        namespace="pegasus", key="transfer.bypass.input.staging", value="True"
+    )
     resources = SlurmResourceRequest.from_parameters(slurm_params)
     initialize_vista_pegasus_wrapper(workflow_params)
 
@@ -729,7 +737,11 @@ def test_dax_with_job_on_saga_with_dict_as_params(tmp_path):
     multiply_artifact = ValueArtifact(
         multiply_output_file,
         depends_on=run_python_on_parameters(
-            multiply_job_name, multiply_by_x_main, multiply_params, depends_on=[]
+            multiply_job_name,
+            multiply_by_x_main,
+            multiply_params,
+            depends_on=[],
+            job_profiles=[job_profile],
         ),
         locator=Locator("multiply"),
     )
@@ -788,3 +800,192 @@ def test_dax_with_job_on_saga_with_dict_as_params(tmp_path):
         workflow_params.existing_directory("workflow_directory") / "pegasus.properties"
     )
     assert properties_file.exists()
+
+
+def test_dax_with_python_into_container_jobs(tmp_path):
+    docker_tar = Path(f"{tmp_path}/docker/tar.tar")
+    docker_build_dir = tmp_path
+    docker_image_name = "pegasus_wrapper_container_demo"
+    docker_image_tag = "0.2"
+
+    # Generating parameters for initializing a workflow
+    # We recommend making workflow directory, site, and partition parameters
+    # in an research workflow
+    workflow_params = Parameters.from_mapping(
+        {
+            "workflow_name": "Test",
+            "workflow_created": "Testing",
+            "workflow_log_dir": str(tmp_path / "log"),
+            "workflow_directory": str(tmp_path / "working"),
+            "site": "saga",
+            "namespace": "test",
+            "home_dir": str(tmp_path),
+            "partition": "scavenge",
+        }
+    )
+
+    saga31_request = SlurmResourceRequest.from_parameters(
+        Parameters.from_mapping({"run_on_single_node": "saga31", "partition": "gaia"})
+    )
+
+    # Our source input for the sample jobs
+    input_file = tmp_path / "raw_nums.txt"
+    add_y_output_file_nas = tmp_path / "nums_y.txt"
+    sorted_output_file_nas = tmp_path / "sorted.txt"
+
+    random = Random()
+    random.seed(0)
+    nums = [int(random.random() * 100) for _ in range(0, 25)]
+
+    # Base Job Locator
+    job_locator = Locator(("jobs",))
+    docker_python_root = Path("/home/app/")
+
+    # Write a list of numbers out to be able to run the workflow
+    with input_file.open("w") as mult_file:
+        mult_file.writelines(f"{num}\n" for num in nums)
+
+    initialize_vista_pegasus_wrapper(workflow_params)
+
+    build_container_locator = job_locator / "build_docker"
+    build_container = run_bash(
+        build_container_locator,
+        command=[
+            "mkdir -p /scratch/dockermount/pegasus_wrapper_tmp",
+            f"cd {docker_build_dir}",
+            f"docker build . -t {docker_image_name}:{docker_image_tag}",
+            f"docker save -o /scratch/dockermount/pegasus_wrapper_tmp/{docker_tar.name} {docker_image_name}:{docker_image_tag}",
+            f"cp /scratch/dockermount/pegasus_wrapper_tmp/{docker_tar.name} {docker_tar.absolute()}",
+            f"chmod go+r {docker_tar.absolute()}",
+        ],
+        depends_on=[],
+        resource_request=saga31_request,
+    )
+    build_container_dir = directory_for(build_container_locator)
+    assert (build_container_dir / "script.sh").exists()
+
+    python36 = add_container(
+        f"{docker_image_name}:{docker_image_tag}",
+        "docker",
+        str(docker_tar.absolute()),
+        image_site="saga",
+        bypass_staging=True,
+    )
+
+    job_profile = PegasusProfile(
+        namespace="pegasus", key="transfer.bypass.input.staging", value="True"
+    )
+
+    mongo4_4 = add_container(
+        "mongo:4.4", "docker", "path/to/tar.tar", image_site="saga", bypass_staging=True
+    )
+
+    with pytest.raises(RuntimeError):
+        _ = stop_docker_as_service(
+            mongo4_4, depends_on=[], resource_request=saga31_request
+        )
+
+    start_mongo = start_docker_as_service(
+        mongo4_4,
+        depends_on=[build_container],
+        docker_args=f"-v /scratch/mongo/data/db:/data/db",
+        resource_request=saga31_request,
+    )
+    mongo4_4_dir = directory_for(Locator(("containers", mongo4_4.name)))
+    assert (mongo4_4_dir / "start.sh").exists()
+    assert (mongo4_4_dir / "stop.sh").exists()
+
+    add_y_locator = job_locator / "add"
+    add_y_job = run_python_on_args(
+        add_y_locator,
+        docker_python_root / "add_y.py",
+        set_args=f"{input_file} {add_y_output_file_nas} --y 10",
+        depends_on=[build_container],
+        job_profiles=[job_profile],
+        resource_request=saga31_request,
+        container=python36,
+        input_file_paths=[input_file],
+        output_file_paths=[add_y_output_file_nas],
+    )
+    add_y_dir = directory_for(add_y_locator)
+    assert (add_y_dir / "___run.sh").exists()
+
+    with pytest.raises(RuntimeError):
+        _ = run_python_on_args(
+            add_y_locator,
+            docker_python_root / "add_y.py",
+            set_args=f"{input_file} {add_y_output_file_nas} --y 10",
+            depends_on=[build_container],
+            job_profiles=[job_profile],
+            resource_request=saga31_request,
+            container=python36,
+            input_file_paths=[input_file, input_file],
+            output_file_paths=[add_y_output_file_nas],
+        )
+
+    sort_job_locator = job_locator / "sort"
+    sort_job = run_python_on_parameters(
+        sort_job_locator,
+        sort_nums_main,
+        {"input_file": add_y_output_file_nas, "output_file": sorted_output_file_nas},
+        depends_on=[add_y_job],
+        container=python36,
+        job_profiles=[job_profile],
+        resource_request=saga31_request,
+        input_file_paths=add_y_output_file_nas,
+        output_file_paths=sorted_output_file_nas,
+    )
+    assert sort_job == run_python_on_parameters(
+        sort_job_locator,
+        sort_nums_main,
+        {"input_file": add_y_output_file_nas, "output_file": sorted_output_file_nas},
+        depends_on=[add_y_job],
+        container=python36,
+        job_profiles=[job_profile],
+        resource_request=saga31_request,
+        input_file_paths=add_y_output_file_nas,
+        output_file_paths=sorted_output_file_nas,
+    )
+    sort_job_dir = directory_for(sort_job_locator)
+    assert (sort_job_dir / "___run.sh").exists()
+    assert (sort_job_dir / "____params.params").exists()
+
+    with pytest.raises(RuntimeError):
+        _ = run_python_on_parameters(
+            sort_job_locator,
+            sort_nums_main,
+            {"input_file": add_y_output_file_nas, "output_file": sorted_output_file_nas},
+            depends_on=[add_y_job],
+            container=python36,
+            job_profiles=[job_profile],
+            resource_request=saga31_request,
+            input_file_paths=add_y_output_file_nas,
+            output_file_paths=[sorted_output_file_nas, sorted_output_file_nas],
+        )
+
+    celebration_bash_locator = job_locator / "celebrate"
+    celebration_bash = run_bash(
+        celebration_bash_locator,
+        'echo "Jobs Runs Successfully"',
+        depends_on=[sort_job],
+        job_profiles=[job_profile],
+    )
+    assert celebration_bash == run_bash(
+        celebration_bash_locator,
+        'echo "Jobs Runs Successfully"',
+        depends_on=[sort_job],
+        job_profiles=[job_profile],
+    )
+    celebration_bash_dir = directory_for(celebration_bash_locator)
+    assert (celebration_bash_dir / "script.sh").exists()
+
+    _ = stop_docker_as_service(
+        mongo4_4, depends_on=[start_mongo, sort_job], resource_request=saga31_request
+    )
+
+    # Generate the Pegasus DAX file & a Submit Script
+    dax_file_one = write_workflow_description(tmp_path)
+    assert dax_file_one.exists()
+
+    submit_script_one = tmp_path / "submit.sh"
+    assert submit_script_one.exists()

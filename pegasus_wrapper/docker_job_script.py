@@ -1,4 +1,3 @@
-import os
 import stat
 from pathlib import Path
 from typing import Optional
@@ -7,7 +6,6 @@ from attr import attrib, attrs
 from attr.validators import instance_of, optional
 
 from vistautils.parameters import Parameters
-from vistautils.parameters_only_entrypoint import parameters_only_entry_point
 
 from saga_tools.spack import SpackConfiguration
 
@@ -56,22 +54,16 @@ class DockerJobScriptGenerator:
         working_directory: Path,
         script_path: Path,
         cmd_args: str = None,
-        stdout_file: Optional[Path] = None,
         ckpt_path: Optional[Path] = None,
         pre_job: str = "",
         post_job: str = "",
     ) -> None:
-
-        if not stdout_file:
-            stdout_file = working_directory / "___stdout.log"
-
         script_path.write_text(
             self.generate_shell_script(
                 docker_image_name=docker_image_name,
                 docker_command=docker_command,
                 docker_tar=docker_tar_path,
                 cmd_args=cmd_args,
-                stdout_file=stdout_file,
                 working_directory=working_directory,
                 ckpt_path=ckpt_path,
                 pre_job=pre_job,
@@ -84,7 +76,7 @@ class DockerJobScriptGenerator:
 
     def write_service_shell_script_to(
         self,
-        docker_image_name: str,
+        docker_container_name: str,
         docker_image_path: str,
         docker_args: str,
         *,
@@ -95,7 +87,7 @@ class DockerJobScriptGenerator:
 
         start_script_path.write_text(
             self.start_docker_script_text(
-                docker_name=docker_image_name,
+                docker_container_name=docker_container_name,
                 docker_args=docker_args,
                 docker_img=docker_image_path,
                 remove_on_exit=remove_docker_on_exit,
@@ -104,7 +96,7 @@ class DockerJobScriptGenerator:
         )
 
         stop_script_path.write_text(
-            self.stop_docker_script_text(docker_name=docker_image_name)
+            self.stop_docker_script_text(docker_container_name=docker_container_name)
         )
         # Mark the generated script as executable.
         start_script_path.chmod(start_script_path.stat().st_mode | stat.S_IEXEC)
@@ -118,7 +110,6 @@ class DockerJobScriptGenerator:
         *,
         cmd_args: str = "",
         working_directory: Path,
-        stdout_file: Path,
         ckpt_path: Optional[Path] = None,
         pre_job: str = "",
         post_job: str = "",
@@ -136,7 +127,6 @@ class DockerJobScriptGenerator:
             docker_args=cmd_args,
             docker_command=docker_command,
             docker_tar=docker_tar,
-            stdout_file=stdout_file,
         )
         ckpt_line = f"touch {ckpt_path.absolute()}" if ckpt_path else ""
 
@@ -151,21 +141,21 @@ class DockerJobScriptGenerator:
 
     def start_docker_script_text(
         self,
-        docker_name: str,
+        docker_container_name: str,
         docker_img: str,
         docker_args: str,
         *,
         remove_on_exit: bool = True,
     ) -> str:
         return DOCKER_START_SCRIPT.format(
-            docker_name=docker_name,
-            docker_img=f" {docker_img}",
+            docker_container_name=docker_container_name,
+            docker_img=docker_img,
             args=docker_args,
-            remove=" --rm" if remove_on_exit else "",
+            remove=" --rm " if remove_on_exit else "",
         )
 
-    def stop_docker_script_text(self, docker_name: str) -> str:
-        return DOCKER_STOP_SCRIPT.format(docker_name=docker_name)
+    def stop_docker_script_text(self, docker_container_name: str) -> str:
+        return DOCKER_STOP_SCRIPT.format(docker_container_name=docker_container_name)
 
 
 DOCKER_SCRIPT = """#!/usr/bin/env bash
@@ -192,20 +182,20 @@ docker run {docker_args} {docker_image} {docker_command}
 DOCKER_STOP_SCRIPT = """
 #!/bin/bash
 
-docker stop {docker_name}
-echo "Stopped {docker_name}"
+docker stop {docker_container_name}
+echo "Stopped {docker_container_name}"
 """
 
 DOCKER_START_SCRIPT = """
 #!/bin/bash -l
 
 echo 'Checking for existing container...'
-RESULT=`docker ps | grep {docker_name}`
+RESULT=`docker container inspect -f '{{.Name}} {{.Id}} {{.State.Status}}' {docker_container_name}`
 if [[ -z "$RESULT" ]]; then
   echo 'Starting...'
-  docker run --name {docker_name} -d {args}{remove}{docker_img}
-  echo '{docker_name} is up'
+  docker run --name {docker_container_name} -d {args}{remove} {docker_img}
+  echo '{docker_container_name} is up'
 else
-  echo '{docker_name} is already up'
+  echo '{docker_container_name} is already up'
 fi
 """

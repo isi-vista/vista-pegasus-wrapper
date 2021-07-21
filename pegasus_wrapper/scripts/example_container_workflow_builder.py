@@ -9,15 +9,16 @@ from pegasus_wrapper import (
     add_container,
     initialize_vista_pegasus_wrapper,
     run_bash,
-    run_container,
     run_python_on_args,
     run_python_on_parameters,
+    start_docker_as_service,
+    stop_docker_as_service,
     write_workflow_description,
 )
 from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.pegasus_profile import PegasusProfile
 from pegasus_wrapper.resource_request import SlurmResourceRequest
-from pegasus_wrapper.scripts import add_y, sort_nums_in_file
+from pegasus_wrapper.scripts import sort_nums_in_file
 
 # NOTES: We can confirm that job is running in container by checking:
 # python -V
@@ -33,14 +34,20 @@ from pegasus_wrapper.scripts import add_y, sort_nums_in_file
 
 def example_workflow(params: Parameters):  # pragma: no cover
     """
-    An example script to generate a workflow for submission to Pegasus.
+    An example script to generate a container workflow for submission to Pegasus.
     """
     tmp_path = params.creatable_directory("example_root_dir")
-    docker_shared_volume = params.string("docker_shared_volume", default="/data/")
-    docker_nas_volume = params.string(
-        "docker_nas_volume", default="/scratch/dockermount/pegasus_wrapper_demo"
+    docker_tar = params.creatable_file("docker_tar")
+    docker_build_dir = params.existing_directory("docker_build_dir")
+    docker_image_name = params.string(
+        "docker_image_name", default="pegasus_wrapper_container_demo"
     )
-    docker_tar = params.existing_file("docker_tar")
+    docker_image_tag = params.string("docker_image_tag", default="0.2")
+    mongo_db_tar = params.string(
+        "mongo_db_tar", default="/nas/gaia/shared/cluster/docker/mongo-4.4.tar"
+    )
+    monogo_db_data = "/scratch/dockermount/pegasus_wrapper_tmp/data"
+    mongo_db_config = "/scratch/dockermount/pegasus_wrapper_tmp/config"
 
     # Generating parameters for initializing a workflow
     # We recommend making workflow directory, site, and partition parameters
@@ -66,25 +73,20 @@ def example_workflow(params: Parameters):  # pragma: no cover
 
     # Our source input for the sample jobs
     input_file = tmp_path / "raw_nums.txt"
-    input_file_docker_scratch = docker_nas_volume + "/raw_nums.txt"
-    input_file_docker = docker_shared_volume + "/raw_nums.txt"
+    add_y_output_file_nas = tmp_path / "nums_y.txt"
+    sorted_output_file_nas = tmp_path / "sorted.txt"
 
     random = Random()
     random.seed(0)
     nums = [int(random.random() * 100) for _ in range(0, 25)]
 
-    add_y_output_file_docker = docker_shared_volume + "/nums_y.txt"
-    sorted_output_file_docker = docker_shared_volume + "/sorted.txt"
-
-    add_y_output_file_docker_scratch = docker_nas_volume + "/nums_y.txt"
-    sorted_output_file_docker_scratch = docker_nas_volume + "/sorted.txt"
-
-    add_y_output_file_nas = tmp_path / "nums_y.txt"
-    sorted_output_file_nas = tmp_path / "sorted.txt"
-
     # Base Job Locator
     job_locator = Locator(("jobs",))
     docker_python_root = Path("/home/app/")
+
+    job_profile = PegasusProfile(
+        namespace="pegasus", key="transfer.bypass.input.staging", value="True"
+    )
 
     # Write a list of numbers out to be able to run the workflow
     with input_file.open("w") as mult_file:
@@ -92,64 +94,70 @@ def example_workflow(params: Parameters):  # pragma: no cover
 
     initialize_vista_pegasus_wrapper(workflow_params)
 
-    # Useful for keeping in mind all the container information
-    # Need to see if the version number should be somewhere other
-    # Than the name for Pegasus, may look into making a custom class
-    # for use in the wrapper for job configuration defaults
+    build_container = run_bash(
+        job_locator / "build_docker",
+        command=[
+            "mkdir -p /scratch/dockermount/pegasus_wrapper_tmp",
+            f"cd {docker_build_dir}",
+            f"docker build . -t {docker_image_name}:{docker_image_tag}",
+            f"docker save -o /scratch/dockermount/pegasus_wrapper_tmp/{docker_tar.name} {docker_image_name}:{docker_image_tag}",
+            f"cp /scratch/dockermount/pegasus_wrapper_tmp/{docker_tar.name} {docker_tar.absolute()}",
+            f"chmod go+r {docker_tar.absolute()}",
+            f"docker load --input {mongo_db_tar}",
+            f"mkdir -p {monogo_db_data}",
+            f"mkdir -p {mongo_db_config}",
+        ],
+        depends_on=[],
+        resource_request=saga31_request,
+    )
+
     python36 = add_container(
-        "pegasus_wrapper_container_demo:0.1",
+        f"{docker_image_name}:{docker_image_tag}",
         "docker",
         str(docker_tar.absolute()),
         image_site="saga",
         bypass_staging=True,
-        mounts=[f"{docker_nas_volume}:{docker_shared_volume}"],
+    )
+
+    mongo4_4 = add_container(
+        "mongo:4.4", "docker", mongo_db_tar, image_site="saga", bypass_staging=True
+    )
+
+    start_mongo = start_docker_as_service(
+        mongo4_4,
+        depends_on=[build_container],
+        mounts=[f"{monogo_db_data}:/data/db", f"{mongo_db_config}/etc/custom"],
+        docker_args=f"-p 27017:27017",
         resource_request=saga31_request,
     )
 
-    job_profile = PegasusProfile(
-        namespace="pegasus", key="transfer.bypass.input.staging", value="True"
-    )
-
-    # I'm not a fan of this at the moment, it feels like it required a lot
-    # Of dev knowledge to use, which is against the idea of the wrapper
-    # Better would be converting a python job call into this latout
-    # These also require quite a bit of bash in addition to just the job
-    # To work properly and get outputs back to the nas from scratch
-    add_y_job = run_container(
+    add_y_job = run_python_on_args(
         job_locator / "add",
-        "pegasus_wrapper_container_demo:0.1",
-        f"--rm -v {docker_nas_volume}:{docker_shared_volume}",
-        f"/usr/local/bin/python {docker_python_root / 'add_y.py'} {input_file_docker} {add_y_output_file_docker} --y 10",
-        depends_on=[],
+        docker_python_root / "add_y.py",
+        set_args=f"{input_file} {add_y_output_file_nas} --y 10",
+        depends_on=[build_container],
         job_profiles=[job_profile],
         resource_request=saga31_request,
-        category="container",
-        post_job_bash="\n".join(
-            [
-                f"cp {add_y_output_file_docker_scratch} {add_y_output_file_nas}",
-                # f"cp {sorted_output_file_docker_scratch} {sorted_output_file_nas}",
-            ]
-        ),
-        pre_job_bash="\n".join(
-            [
-                f"mkdir -p /scratch/dockermount/pegasus_wrapper_demo",
-                f"cp {input_file} {input_file_docker_scratch}",
-            ]
-        ),
+        container=python36,
+        input_file_paths=[input_file],
+        output_file_paths=[add_y_output_file_nas],
     )
 
-    # sort_job = run_python_on_parameters(
-    #     job_locator / "sort",
-    #     sort_nums_in_file,
-    #     {
-    #         "input_file": add_y_output_file_docker,
-    #         "output_file": sorted_output_file_docker,
-    #     },
-    #     depends_on=[add_y_job],
-    #     container=python36,
-    #     job_profiles=[job_profile],
-    #     resource_request=saga31_request,
-    # )
+    sort_job = run_python_on_parameters(
+        job_locator / "sort",
+        sort_nums_in_file,
+        {"input_file": add_y_output_file_nas, "output_file": sorted_output_file_nas},
+        depends_on=[add_y_job],
+        container=python36,
+        job_profiles=[job_profile],
+        resource_request=saga31_request,
+        input_file_paths=add_y_output_file_nas,
+        output_file_paths=sorted_output_file_nas,
+    )
+
+    _ = stop_docker_as_service(
+        mongo4_4, depends_on=[start_mongo, sort_job], resource_request=saga31_request
+    )
 
     # Generate the Pegasus DAX file & a Submit Script
     write_workflow_description(tmp_path)

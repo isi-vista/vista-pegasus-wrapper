@@ -6,6 +6,7 @@ and should instead use the methods in the root of the package.
 """
 import logging
 import subprocess
+from itertools import chain
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Union
 
@@ -21,6 +22,7 @@ from pegasus_wrapper.artifact import DependencyNode, _canonicalize_depends_on
 from pegasus_wrapper.conda_job_script import CondaJobScriptGenerator
 from pegasus_wrapper.docker_job_script import DockerJobScriptGenerator
 from pegasus_wrapper.locator import Locator
+from pegasus_wrapper.pegasus_container import PegasusContainerFile
 from pegasus_wrapper.pegasus_profile import PegasusProfile
 from pegasus_wrapper.pegasus_transformation import PegasusTransformation
 from pegasus_wrapper.pegasus_utils import (
@@ -275,6 +277,8 @@ class WorkflowBuilder:
         times_to_retry_job: int = 0,
         job_profiles: Optional[List[PegasusProfile]] = None,
         treat_params_as_cmd_args: bool = False,
+        input_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
+        output_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
     ) -> DependencyNode:
         """
         Internal function to schedule a python job for centralized logic.
@@ -306,6 +310,25 @@ class WorkflowBuilder:
         if signature in self._signature_to_job:
             logging.info("Job %s recognized as a duplicate", job_name)
             return self._signature_to_job[signature]
+
+        if container:
+            return self._run_python_in_container(
+                job_name,
+                computed_module_or_path,
+                args_or_params,
+                container,
+                depends_on=depends_on,
+                input_files=input_file_paths,
+                output_files=output_file_paths,
+                resource_request=resource_request,
+                category=category,
+                pre_docker_bash=pre_job_bash,
+                post_docker_bash=post_job_bash,
+                job_is_stageable=job_is_stageable,
+                job_bypass_staging=job_bypass_staging,
+                times_to_retry_job=times_to_retry_job,
+                job_profiles=job_profiles,
+            )
 
         script_path = job_dir / "___run.sh"
         stdout_path = job_dir / "___stdout.log"
@@ -377,12 +400,198 @@ class WorkflowBuilder:
         logging.info("Scheduled Python job %s", job_name)
         return dependency_node
 
+    def _run_python_in_container(
+        self,
+        job_name: Locator,
+        python_module_or_path_on_docker: Union[str, Path],
+        python_args_or_parameters: Union[Parameters, str],
+        container: Container,
+        *,
+        depends_on,
+        docker_args: str = "",
+        python_executable_path_in_docker: Path = Path("/usr/local/bin/python"),
+        input_files: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
+        output_files: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
+        docker_mount_root: Path = Path("/data/"),
+        resource_request: Optional[ResourceRequest] = None,
+        category: Optional[str] = None,
+        pre_docker_bash: Union[Iterable[str], str] = "",
+        post_docker_bash: Union[Iterable[str], str] = "",
+        job_is_stageable: bool = False,
+        job_bypass_staging: bool = False,
+        times_to_retry_job: int = 0,
+        job_profiles: Optional[List[PegasusProfile]] = None,
+    ) -> DependencyNode:
+        """
+        Automatically converts a python job into a container request
+        """
+        # Ensure the input and output files are iterables of Path or str
+        if isinstance(input_files, (Path, str)):
+            input_files = immutableset([input_files])
+        if isinstance(output_files, (Path, str)):
+            output_files = immutableset([output_files])
+        # A set to keep track of all the file names that will be created or copied into
+        # The mounted directory. We use this to raise errors if a duplicate name would appear
+        params_file_name = "____params.params"
+        params_file = None
+        file_names = set(params_file_name)
+        job_dir = self.directory_for(job_name)
+        # Define the root mount point for scratch mount
+        scratch_root = Path("/scratch/dockermount/") / self.name / str(job_name)
+        # Define the self-needed docker args
+        modified_docker_args = (
+            f"--rm -v {scratch_root}:{docker_mount_root} " + docker_args
+        )
+
+        # Build paths mappings for docker
+        mapping_input_files = []
+        for i_file in input_files:
+            if i_file.name in file_names:
+                raise RuntimeError(
+                    f"Unable to create container job {job_name} with multiple files with name {i_file.name}"
+                )
+            file_names.add(i_file.name)
+            mapping_input_files.append(
+                (
+                    str(i_file.absolute()),
+                    PegasusContainerFile(
+                        name=i_file.name,
+                        nas=i_file,
+                        scratch=scratch_root / i_file.name,
+                        docker=docker_mount_root / i_file.name,
+                    ),
+                )
+            )
+        converted_input_files = immutabledict(mapping_input_files)
+
+        mapping_output_files = []
+        for o_file in output_files:
+            if o_file.name in file_names:
+                raise RuntimeError(
+                    f"Unable to create container job {job_name} with multiple files with name {o_file.name}"
+                )
+            file_names.add(o_file.name)
+            mapping_output_files.append(
+                (
+                    str(o_file.absolute()),
+                    PegasusContainerFile(
+                        name=o_file.name,
+                        nas=o_file,
+                        scratch=scratch_root / o_file.name,
+                        docker=docker_mount_root / o_file.name,
+                    ),
+                )
+            )
+        converted_output_files = immutabledict(mapping_output_files)
+
+        # Process the Python Parameters or Args for any file paths which need to change
+        if isinstance(python_args_or_parameters, Parameters):
+            mutable_params = dict(python_args_or_parameters.as_mapping())
+            for key, value in python_args_or_parameters.as_mapping().items():
+                if isinstance(value, Path):
+                    if str(value.absolute()) in converted_input_files:
+                        mutable_params[key] = str(
+                            converted_input_files[str(value.absolute())].docker.absolute()
+                        )
+                    elif str(value.absolute()) in converted_output_files:
+                        mutable_params[key] = str(
+                            converted_output_files[
+                                str(value.absolute())
+                            ].docker.absolute()
+                        )
+            modified_params = Parameters.from_mapping(mutable_params)
+            params_path = job_dir / params_file_name
+            YAMLParametersWriter().write(modified_params, CharSink.to_file(params_path))
+            params_file = PegasusContainerFile(
+                name=params_file_name,
+                nas=params_path,
+                scratch=scratch_root / params_file_name,
+                docker=docker_mount_root / params_file_name,
+            )
+            python_args = params_file.docker
+        elif isinstance(python_args_or_parameters, str):
+            python_args_tok = []
+            for tok in python_args_or_parameters.split(" "):
+                if tok in converted_input_files:
+                    python_args_tok.append(
+                        str(converted_input_files[tok].docker.absolute())
+                    )
+                elif tok in converted_output_files:
+                    python_args_tok.append(
+                        str(converted_output_files[tok].docker.absolute())
+                    )
+                else:
+                    python_args_tok.append(tok)
+            python_args = " ".join(python_args_tok)
+        else:
+            raise RuntimeError(
+                f"Unsure how to handle python_args_or_parameters of type {type(python_args_or_parameters)}. Data: {python_args_or_parameters}"
+            )
+
+        # Combine any user requested pre-docker bash with automatic
+        # Movement of files from NAS locations to /scratch dir locations
+        pre_job_bash = "\n".join(
+            chain(
+                [
+                    f"mkdir -p {scratch_root}",
+                    f"cp {str(params_file.nas.absolute())} {str(params_file.scratch.absolute())}"
+                    if params_file
+                    else "",
+                ],
+                [
+                    f"cp {str(i_file.nas.absolute())} {str(i_file.scratch.absolute())}"
+                    for i_file in converted_input_files.values()
+                ],
+                pre_docker_bash,
+            )
+        )
+
+        # Combine any user requested post-docker bash with automatic
+        # Movement of files from /scratch locations to NAS locations
+        post_job_bash = "\n".join(
+            chain(
+                [
+                    f"cp {str(o_file.scratch.absolute())} {str(o_file.nas.absolute())}"
+                    for o_file in converted_output_files.values()
+                ],
+                post_docker_bash,
+            )
+        )
+
+        # Generate the command to run the python job
+        python_start = (
+            f"-m {python_module_or_path_on_docker}"
+            if isinstance(python_module_or_path_on_docker, str)
+            else str(python_module_or_path_on_docker)
+        )
+        docker_run_command = (
+            f"{python_executable_path_in_docker} {python_start} {python_args}"
+        )
+
+        return self.run_container(
+            job_name,
+            container.name,
+            modified_docker_args,
+            docker_run_command,
+            container.image,
+            depends_on=depends_on,
+            job_is_stageable=job_is_stageable,
+            job_bypass_staging=job_bypass_staging,
+            times_to_retry_job=times_to_retry_job,
+            job_profiles=job_profiles,
+            pre_job_bash=pre_job_bash,
+            post_job_bash=post_job_bash,
+            category=category,
+            resource_request=resource_request,
+        )
+
     def run_container(
         self,
         job_name: Locator,
         docker_image_name: str,
         docker_args: str,
         docker_run_comand: str,
+        docker_tar_path: str,
         *,
         depends_on,
         resource_request: Optional[ResourceRequest] = None,
@@ -406,20 +615,15 @@ class WorkflowBuilder:
             return self._signature_to_job[signature]
 
         script_path = job_dir / "___run.sh"
-        stdout_path = job_dir / "___stdout.log"
-
-        # Generate copy commands to relocate files from NAS to scratch
-        # Or from Scratch to NAS at start and end of docker container job
-        # TODO: Automatic file staging into and out of local scratch mounts
 
         # Part of one strategy to run a container through a bash script
         self._docker_script_generator.write_shell_script_to(
             docker_image_name=docker_image_name,
             docker_command=docker_run_comand,
+            docker_tar_path=docker_tar_path,
             working_directory=job_dir,
             script_path=script_path,
             cmd_args=docker_args,
-            stdout_file=stdout_path,
             ckpt_path=checkpoint_path,
             pre_job=pre_job_bash,
             post_job=post_job_bash,
@@ -496,6 +700,8 @@ class WorkflowBuilder:
         job_bypass_staging: bool = False,
         times_to_retry_job: int = 0,
         job_profiles: Optional[List[PegasusProfile]] = None,
+        input_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
+        output_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
     ) -> DependencyNode:
         """
         Schedule a job to run the given *python_module* on the given *parameters*.
@@ -527,6 +733,8 @@ class WorkflowBuilder:
             job_bypass_staging=job_bypass_staging,
             times_to_retry_job=times_to_retry_job,
             job_profiles=job_profiles,
+            input_file_paths=input_file_paths,
+            output_file_paths=output_file_paths,
         )
 
     def run_python_on_args(
@@ -547,6 +755,8 @@ class WorkflowBuilder:
         times_to_retry_job: int = 0,
         container: Optional[Container] = None,
         job_profiles: Optional[List[PegasusProfile]] = None,
+        input_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
+        output_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
     ) -> DependencyNode:
         """
         Schedule a job to run the given *python_script* with the given *set_args*.
@@ -579,6 +789,8 @@ class WorkflowBuilder:
             times_to_retry_job=times_to_retry_job,
             job_profiles=job_profiles,
             treat_params_as_cmd_args=True,
+            input_file_paths=input_file_paths,
+            output_file_paths=output_file_paths,
         )
 
     def run_bash(
@@ -672,6 +884,71 @@ class WorkflowBuilder:
 
         return dependency_node
 
+    def start_docker_as_service(
+        self,
+        container: Container,
+        *,
+        depends_on,
+        mounts: Union[Iterable[str], str] = immutableset(),
+        docker_args: str = "",
+        resource_request: Optional[ResourceRequest] = None,
+    ) -> DependencyNode:
+        """
+        Start a docker image as a service
+        """
+        if isinstance(mounts, str):
+            mounts = immutableset(mounts)
+
+        container_loc = Locator(("containers", container.name))
+        container_dir = self.directory_for(container_loc)
+        container_start_path = container_dir / "start.sh"
+        container_stop_path = container_dir / "stop.sh"
+
+        docker_args += " -v ".join(mounts)
+
+        self._docker_script_generator.write_service_shell_script_to(
+            container.name,
+            docker_image_path=container.image,
+            docker_args=docker_args,
+            start_script_path=container_start_path,
+            stop_script_path=container_stop_path,
+        )
+
+        return self.run_bash(
+            container_loc / "start",
+            str(container_start_path.absolute()),
+            resource_request=resource_request,
+            depends_on=depends_on,
+        )
+
+    def stop_docker_as_service(
+        self,
+        container: Container,
+        *,
+        depends_on,
+        resource_request: Optional[ResourceRequest] = None,
+    ) -> DependencyNode:
+        """
+        Stops a docker image from running as a service.
+
+        Must be provided an identical resource request as the start service.
+        """
+        container_loc = Locator(("containers", container.name))
+        container_dir = self.directory_for(container_loc)
+        container_stop_path = container_dir / "stop.sh"
+
+        if not container_stop_path.exists():
+            raise RuntimeError(
+                f"This docker container was never scheduled to start as a service. Name {container.name}"
+            )
+
+        return self.run_bash(
+            container_loc / "stop",
+            str(container_stop_path.absolute()),
+            resource_request=resource_request,
+            depends_on=depends_on,
+        )
+
     def add_container(
         self,
         container_name: str,
@@ -684,8 +961,6 @@ class WorkflowBuilder:
         checksum: Optional[Mapping[str, str]] = None,
         metadata: Optional[Mapping[str, Union[float, int, str]]] = None,
         bypass_staging: bool = False,
-        resource_request: Optional[ResourceRequest] = None,
-        configure_as_service: bool = False,
     ) -> Container:
         """
         Add a container to the transformation catalog, to be used on a Job request
@@ -704,55 +979,15 @@ class WorkflowBuilder:
             container_name,
             container_type=_STR_TO_CONTAINER_TYPE[container_type],
             image=str(image.absolute()) if isinstance(image, Path) else image,
-            arguments=arguments if not configure_as_service else None,
-            mounts=mounts if not configure_as_service else None,
-            image_site=image_site if image_site is None else self._default_site,
+            arguments=arguments,
+            mounts=mounts,
+            image_site=image_site if image_site is not None else self._default_site,
             checksum=immutabledict(checksum) if checksum else None,
             metadata=immutabledict(metadata) if metadata else None,
             bypass_staging=bypass_staging,
         )
 
         self._transformation_catalog.add_containers(container)
-
-        if (
-            configure_as_service
-            and _STR_TO_CONTAINER_TYPE[container_type] == Container.DOCKER
-        ):
-            container_loc = Locator(["container", container_name])
-            container_dir = self.directory_for(container_loc)
-            container_start_path = container_dir / "start.sh"
-            container_stop_path = container_dir / "stop.sh"
-
-            arguments_with_mounts = " -v ".join(mounts)
-
-            if arguments:
-                arguments_with_mounts = arguments + arguments_with_mounts
-
-            self._docker_script_generator.write_service_shell_script_to(
-                container_name,
-                docker_image_path=str(image.absolute())
-                if isinstance(image, Path)
-                else image,
-                docker_args=arguments_with_mounts,
-                start_script_path=container_start_path,
-                stop_script_path=container_stop_path,
-            )
-
-            start = self.run_bash(
-                container_loc / "start",
-                str(container_start_path.absolute()),
-                resource_request=resource_request,
-                depends_on=[],
-            )
-
-            stop = self.run_bash(
-                container_loc / "stop",
-                str(container_stop_path.absolute()),
-                resource_request=resource_request,
-                depends_on=[],
-            )
-
-            self._container_to_start_stop_job[container] = (start, stop)
 
         return container
 

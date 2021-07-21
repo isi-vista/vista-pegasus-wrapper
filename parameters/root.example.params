@@ -1,4 +1,5 @@
 example_root_dir: example/path
 conda_environment: "pegasus-wrapper"
 conda_base_path: /path/to/conda/install
-docker_tar: /nas/gaia/shared/cluster/docker/pegasus-wrapper_container_demo0.1.tar
+docker_tar: /nas/gaia/shared/cluster/docker/pegasus-wrapper_container_demo.tar
+docker_build_dir: /path/to/pegasus/wrapper/scripts

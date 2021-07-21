@@ -8,6 +8,8 @@ LABEL maintainer="jacobl@isi.edu"
 
 WORKDIR /home/app
 COPY add_y.py /home/app/
-COPY sort_nums_in_file.py /home/app/
+RUN pip install git+https://github.com/isi-vista/saga-tools.git@master#egg=saga-tools
+RUN pip install more_itertools
+RUN pip install pegasus-wrapper
 
-CMD echo "Docker running"
+CMD echo "Docker running/completed"
