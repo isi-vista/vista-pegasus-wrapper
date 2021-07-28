@@ -49,6 +49,12 @@ from Pegasus.api import (
 )
 from saga_tools.conda import CondaConfiguration
 
+# Default paths used for various python -> docker coordination
+DOCKERMOUNT_SCRATCH_PATH_ROOT = Path("/scratch/dockermount/")
+BASH_EXECUTABLE_PATH = Path("/usr/bin/bash")
+PYTHON_EXECUTABLE_DOCKER_PATH = Path("/usr/local/bin/python")
+DOCKER_MOUNT_ROOT = Path("/data/")
+
 _STR_TO_CONTAINER_TYPE = immutabledict(
     {
         "docker": Container.DOCKER,
@@ -228,10 +234,11 @@ class WorkflowBuilder:
         os_type: Optional[OS] = None,
     ) -> PegasusTransformation:
         # Try to see if we have the target transformation already made
-        if name in self._transformation_name_to_transformations:
-            for transformation in self._transformation_name_to_transformations[name]:
-                if transformation.container == container:
-                    return transformation
+        for transformation in self._transformation_name_to_transformations.get(
+            name, immutableset()
+        ):
+            if transformation.container == container:
+                return transformation
         # Otherwise make the transformation and return it
         transform = Transformation(
             name,
@@ -248,15 +255,63 @@ class WorkflowBuilder:
 
         self._transformation_catalog.add_transformations(transform)
 
-        peg_transform = PegasusTransformation(
+        pegasus_transform = PegasusTransformation(
             name=name, transformation=transform, container=container
         )
 
         if name not in self._transformation_name_to_transformations:
             self._transformation_name_to_transformations[name] = list()
 
-        self._transformation_name_to_transformations[name].append(peg_transform)
-        return peg_transform
+        self._transformation_name_to_transformations[name].append(pegasus_transform)
+        return pegasus_transform
+
+    def _update_job_settings(
+        self,
+        category: str,
+        checkpoint_path: Path,
+        ckpt_name: Locator,
+        depends_on,
+        job: Job,
+        job_name: Locator,
+        job_profiles: Iterable[PegasusProfile],
+        resource_request: ResourceRequest,
+        times_to_retry_job: int,
+    ) -> DependencyNode:
+        """
+        Apply a variety of shared settings to a job.
+
+        Centralized logic for multiple job types to use.
+        """
+        self._job_graph.add_jobs(job)
+
+        # Configure SLURM resource request
+        resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
+
+        # Set the DAGMAN category to potentially limit the number of active jobs
+        job.add_dagman_profile(category=category, retry=str(times_to_retry_job))
+
+        # Apply other user defined pegasus profiles
+        for profile in job_profiles:
+            job.add_profiles(profile.namespace, key=profile.key, value=profile.value)
+
+        # Handle depedent job additions from the `depends_on` variable
+        for parent_dependency in depends_on:
+            if parent_dependency.job:
+                self._job_graph.add_dependency(job, parents=[parent_dependency.job])
+            for out_file in parent_dependency.output_files:
+                job.add_inputs(out_file)
+
+        # Handle Output Files
+        # This is currently only handled as the checkpoint file
+        # See: https://github.com/isi-vista/vista-pegasus-wrapper/issues/25
+        # If the checkpoint file already exists, we want to add it to the replica catalog
+        # so that we don't run the job corresponding to the checkpoint file again
+        checkpoint_pegasus_file = self.create_file(
+            f"{ckpt_name}", checkpoint_path, add_to_catalog=checkpoint_path.exists()
+        )
+        job.add_outputs(checkpoint_pegasus_file, stage_out=False)
+
+        return DependencyNode.from_job(job, output_files=[checkpoint_pegasus_file])
 
     def _run_python_job(
         self,
@@ -275,7 +330,7 @@ class WorkflowBuilder:
         job_is_stageable: bool = False,
         job_bypass_staging: bool = False,
         times_to_retry_job: int = 0,
-        job_profiles: Optional[List[PegasusProfile]] = None,
+        job_profiles: Iterable[PegasusProfile] = immutableset(),
         treat_params_as_cmd_args: bool = False,
         input_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
         output_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
@@ -362,38 +417,19 @@ class WorkflowBuilder:
         )
 
         self._transformation_catalog.add_transformations(script_executable)
-
-        job = Job(script_executable)
-        self._job_graph.add_jobs(job)
-        for parent_dependency in depends_on:
-            if parent_dependency.job:
-                self._job_graph.add_dependency(job, parents=[parent_dependency.job])
-            for out_file in parent_dependency.output_files:
-                job.add_inputs(out_file)
-
         resource_request = self.set_resource_request(resource_request)
 
-        job.add_dagman_profile(category=category, retry=str(times_to_retry_job))
-
-        if job_profiles:
-            for profile in job_profiles:
-                job.add_profiles(profile.namespace, key=profile.key, value=profile.value)
-
-        resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
-
-        # Handle Output Files
-        # This is currently only handled as the checkpoint file
-        # See: https://github.com/isi-vista/vista-pegasus-wrapper/issues/25
-        # If the checkpoint file already exists, we want to add it to the replica catalog
-        # so that we don't run the job corresponding to the checkpoint file again
-        checkpoint_pegasus_file = self.create_file(
-            f"{ckpt_name}", checkpoint_path, add_to_catalog=checkpoint_path.exists()
-        )
-
-        job.add_outputs(checkpoint_pegasus_file, stage_out=False)
-
-        dependency_node = DependencyNode.from_job(
-            job, output_files=[checkpoint_pegasus_file]
+        job = Job(script_executable)
+        dependency_node = self._update_job_settings(
+            category,
+            checkpoint_path,
+            ckpt_name,
+            depends_on,
+            job,
+            job_name,
+            job_profiles,
+            resource_request,
+            times_to_retry_job,
         )
         self._signature_to_job[signature] = dependency_node
 
@@ -409,10 +445,10 @@ class WorkflowBuilder:
         *,
         depends_on,
         docker_args: str = "",
-        python_executable_path_in_docker: Path = Path("/usr/local/bin/python"),
+        python_executable_path_in_docker: Path = PYTHON_EXECUTABLE_DOCKER_PATH,
         input_files: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
         output_files: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
-        docker_mount_root: Path = Path("/data/"),
+        docker_mount_root: Path = DOCKER_MOUNT_ROOT,
         resource_request: Optional[ResourceRequest] = None,
         category: Optional[str] = None,
         pre_docker_bash: Union[Iterable[str], str] = "",
@@ -420,7 +456,7 @@ class WorkflowBuilder:
         job_is_stageable: bool = False,
         job_bypass_staging: bool = False,
         times_to_retry_job: int = 0,
-        job_profiles: Optional[List[PegasusProfile]] = None,
+        job_profiles: Iterable[PegasusProfile] = immutableset(),
     ) -> DependencyNode:
         """
         Automatically converts a python job into a container request
@@ -437,7 +473,7 @@ class WorkflowBuilder:
         file_names = set(params_file_name)
         job_dir = self.directory_for(job_name)
         # Define the root mount point for scratch mount
-        scratch_root = Path("/scratch/dockermount/") / self.name / str(job_name)
+        scratch_root = DOCKERMOUNT_SCRATCH_PATH_ROOT / self.name / str(job_name)
         # Define the self-needed docker args
         modified_docker_args = (
             f"--rm -v {scratch_root}:{docker_mount_root} " + docker_args
@@ -525,7 +561,7 @@ class WorkflowBuilder:
             python_args = " ".join(python_args_tok)
         else:
             raise RuntimeError(
-                f"Unsure how to handle python_args_or_parameters of type {type(python_args_or_parameters)}. Data: {python_args_or_parameters}"
+                f"Cannot handle python_args_or_parameters of type {type(python_args_or_parameters)}. Data: {python_args_or_parameters}"
             )
 
         # Combine any user requested pre-docker bash with automatic
@@ -601,7 +637,7 @@ class WorkflowBuilder:
         job_is_stageable: bool = False,
         job_bypass_staging: bool = True,
         times_to_retry_job: int = 0,
-        job_profiles: Optional[List[PegasusProfile]] = None,
+        job_profiles: Iterable[PegasusProfile] = immutableset(),
     ) -> DependencyNode:
 
         job_dir = self.directory_for(job_name)
@@ -631,6 +667,7 @@ class WorkflowBuilder:
 
         # TODO - Refactor this so it uses the BASH transformation to form a job
         # With the script path as an argument
+        # https://github.com/isi-vista/vista-pegasus-wrapper/issues/103
         script_executable = Transformation(
             self._job_name_for(job_name),
             namespace=self._namespace,
@@ -644,38 +681,19 @@ class WorkflowBuilder:
         )
 
         self._transformation_catalog.add_transformations(script_executable)
-
-        job = Job(script_executable)
-        self._job_graph.add_jobs(job)
-        for parent_dependency in depends_on:
-            if parent_dependency.job:
-                self._job_graph.add_dependency(job, parents=[parent_dependency.job])
-            for out_file in parent_dependency.output_files:
-                job.add_inputs(out_file)
-
         resource_request = self.set_resource_request(resource_request)
 
-        job.add_dagman_profile(category=category, retry=str(times_to_retry_job))
-
-        if job_profiles:
-            for profile in job_profiles:
-                job.add_profiles(profile.namespace, key=profile.key, value=profile.value)
-
-        resource_request.apply_to_job(job, job_name=self._job_name_for(job_name))
-
-        # Handle Output Files
-        # This is currently only handled as the checkpoint file
-        # See: https://github.com/isi-vista/vista-pegasus-wrapper/issues/25
-        # If the checkpoint file already exists, we want to add it to the replica catalog
-        # so that we don't run the job corresponding to the checkpoint file again
-        checkpoint_pegasus_file = self.create_file(
-            f"{ckpt_name}", checkpoint_path, add_to_catalog=checkpoint_path.exists()
-        )
-
-        job.add_outputs(checkpoint_pegasus_file, stage_out=False)
-
-        dependency_node = DependencyNode.from_job(
-            job, output_files=[checkpoint_pegasus_file]
+        job = Job(script_executable)
+        dependency_node = self._update_job_settings(
+            category,
+            checkpoint_path,
+            ckpt_name,
+            depends_on,
+            job,
+            job_name,
+            job_profiles,
+            resource_request,
+            times_to_retry_job,
         )
         self._signature_to_job[signature] = dependency_node
 
@@ -699,7 +717,7 @@ class WorkflowBuilder:
         job_is_stageable: bool = False,
         job_bypass_staging: bool = False,
         times_to_retry_job: int = 0,
-        job_profiles: Optional[List[PegasusProfile]] = None,
+        job_profiles: Iterable[PegasusProfile] = immutableset(),
         input_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
         output_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
     ) -> DependencyNode:
@@ -754,7 +772,7 @@ class WorkflowBuilder:
         post_job_bash: str = "",
         times_to_retry_job: int = 0,
         container: Optional[Container] = None,
-        job_profiles: Optional[List[PegasusProfile]] = None,
+        job_profiles: Iterable[PegasusProfile] = immutableset(),
         input_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
         output_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
     ) -> DependencyNode:
@@ -804,9 +822,9 @@ class WorkflowBuilder:
         job_is_stageable: bool = False,
         job_bypass_staging: bool = False,
         times_to_retry_job: int = 0,
-        job_profiles: Optional[List[PegasusProfile]] = None,
+        job_profiles: Iterable[PegasusProfile] = immutableset(),
         container: Optional[Container] = None,
-        path_to_bash: Path = Path("/usr/bin/bash"),
+        path_to_bash: Path = BASH_EXECUTABLE_PATH,
     ) -> DependencyNode:
         """
         Schedule a job to run the given *command* with the given *resource_request*
@@ -817,9 +835,6 @@ class WorkflowBuilder:
         This method returns a `DependencyNode` which can be used in *depends_on*
         for future jobs.
         """
-        if job_profiles is None:
-            job_profiles = []
-
         if isinstance(command, str):
             command = [command]
 
@@ -848,36 +863,21 @@ class WorkflowBuilder:
         commands_with_ckpt.append(f"touch {ckpt_path.absolute()}")
 
         job_script.write_text("\n".join(commands_with_ckpt))
+        resource_request = self.set_resource_request(resource_request)
 
         bash_job = Job(bash_transform)
         bash_job.add_args(str(job_script.absolute()))
-        bash_job.add_dagman_profile(category=category, retry=str(times_to_retry_job))
-
-        for profile in job_profiles:
-            bash_job.add_profiles(profile.namespace, key=profile.key, value=profile.value)
-
-        resource_request = self.set_resource_request(resource_request)
-        resource_request.apply_to_job(bash_job, job_name=self._job_name_for(job_name))
-
-        self._job_graph.add_jobs(bash_job)
-        for parent_dependency in depends_on:
-            if parent_dependency.job:
-                self._job_graph.add_dependency(bash_job, parents=[parent_dependency.job])
-            for out_file in parent_dependency.output_files:
-                bash_job.add_inputs(out_file)
-
-        # Handle Output Files
-        # This is currently only handled as the checkpoint file
-        # See: https://github.com/isi-vista/vista-pegasus-wrapper/issues/25
-        # If the checkpoint file already exists, we want to add it to the replica catalog
-        # so that we don't run the job corresponding to the checkpoint file again
-        checkpoint_pegasus_file = self.create_file(
-            self._job_name_for(ckpt_name), ckpt_path, add_to_catalog=ckpt_path.exists()
+        dependency_node = self._update_job_settings(
+            category,
+            ckpt_path,
+            ckpt_name,
+            depends_on,
+            bash_job,
+            job_name,
+            job_profiles,
+            resource_request,
+            times_to_retry_job,
         )
-
-        bash_job.add_outputs(checkpoint_pegasus_file, stage_out=False)
-
-        dependency_node = DependencyNode.from_job(bash_job, output_files=None)
 
         self._signature_to_job[signature] = dependency_node
         logging.info("Scheduled bash job %s", job_name)

@@ -25,7 +25,7 @@ from pegasus_wrapper.locator import Locator
 from pegasus_wrapper.pegasus_profile import PegasusProfile
 from pegasus_wrapper.resource_request import ResourceRequest
 from pegasus_wrapper.version import version as __version__  # noqa
-from pegasus_wrapper.workflow import WorkflowBuilder
+from pegasus_wrapper.workflow import BASH_EXECUTABLE_PATH, WorkflowBuilder
 
 from Pegasus.api import Container
 from saga_tools.conda import CondaConfiguration
@@ -69,7 +69,7 @@ def run_python_on_parameters(
     pre_job_bash: str = "",
     post_job_bash: str = "",
     times_to_retry_job: int = 0,
-    job_profiles: Optional[List[PegasusProfile]] = None,
+    job_profiles: Iterable[PegasusProfile] = immutableset(),
     input_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
     output_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
 ) -> DependencyNode:
@@ -125,7 +125,7 @@ def run_python_on_args(
     pre_job_bash: str = "",
     post_job_bash: str = "",
     times_to_retry_job: int = 0,
-    job_profiles: Optional[List[PegasusProfile]] = None,
+    job_profiles: Iterable[PegasusProfile] = immutableset(),
     container: Optional[Container] = None,
     input_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
     output_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
@@ -176,7 +176,7 @@ def run_container(
     job_is_stageable: bool = False,
     job_bypass_staging: bool = False,
     times_to_retry_job: int = 0,
-    job_profiles: Optional[List[PegasusProfile]] = None,
+    job_profiles: Iterable[PegasusProfile] = immutableset(),
 ) -> DependencyNode:
     _assert_singleton_workflow_builder()
     return _SINGLETON_WORKFLOW_BUILDER.run_container(
@@ -243,9 +243,9 @@ def run_bash(
     job_is_stageable: bool = False,
     job_bypass_staging: bool = False,
     times_to_retry_job: int = 0,
-    job_profiles: Optional[List[PegasusProfile]] = None,
+    job_profiles: Iterable[PegasusProfile] = immutableset(),
     container: Optional[Container] = None,
-    path_to_bash: Path = Path("/usr/bin/bash"),
+    path_to_bash: Path = BASH_EXECUTABLE_PATH,
 ) -> DependencyNode:
     _assert_singleton_workflow_builder()
     return _SINGLETON_WORKFLOW_BUILDER.run_bash(
