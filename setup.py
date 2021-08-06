@@ -26,6 +26,7 @@ setup(
 	    "vistautils>=0.21.0",
         "gitpython==3.1.12",
         "pegasus-wms.api==5.0.0",
+        "more_itertools==8.2.0"
     ],
     classifiers=[
         "Programming Language :: Python :: 3",

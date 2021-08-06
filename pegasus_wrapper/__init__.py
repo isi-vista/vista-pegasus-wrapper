@@ -17,13 +17,15 @@ Terminology
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Union
 
+from immutablecollections import immutableset
 from vistautils.parameters import Parameters
 
 from pegasus_wrapper.artifact import DependencyNode
 from pegasus_wrapper.locator import Locator
+from pegasus_wrapper.pegasus_profile import PegasusProfile
 from pegasus_wrapper.resource_request import ResourceRequest
 from pegasus_wrapper.version import version as __version__  # noqa
-from pegasus_wrapper.workflow import WorkflowBuilder
+from pegasus_wrapper.workflow import BASH_EXECUTABLE_PATH, WorkflowBuilder
 
 from Pegasus.api import Container
 from saga_tools.conda import CondaConfiguration
@@ -62,11 +64,14 @@ def run_python_on_parameters(
     resource_request: Optional[ResourceRequest] = None,
     override_conda_config: Optional[CondaConfiguration] = None,
     category: Optional[str] = None,
-    container=None,
+    container: Optional[Container] = None,
     use_pypy: bool = False,
     pre_job_bash: str = "",
     post_job_bash: str = "",
     times_to_retry_job: int = 0,
+    job_profiles: Iterable[PegasusProfile] = immutableset(),
+    input_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
+    output_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
 ) -> DependencyNode:
     """
     Schedule a job to run the given *python_module* on the given *parameters*.
@@ -91,6 +96,9 @@ def run_python_on_parameters(
         pre_job_bash=pre_job_bash,
         post_job_bash=post_job_bash,
         times_to_retry_job=times_to_retry_job,
+        job_profiles=job_profiles,
+        input_file_paths=input_file_paths,
+        output_file_paths=output_file_paths,
     )
 
 
@@ -117,6 +125,10 @@ def run_python_on_args(
     pre_job_bash: str = "",
     post_job_bash: str = "",
     times_to_retry_job: int = 0,
+    job_profiles: Iterable[PegasusProfile] = immutableset(),
+    container: Optional[Container] = None,
+    input_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
+    output_file_paths: Union[Iterable[Union[Path, str]], Path, str] = immutableset(),
 ) -> DependencyNode:
     """
     Schedule a job to run the given *python_script* with the given *set_args*.
@@ -142,6 +154,46 @@ def run_python_on_args(
         pre_job_bash=pre_job_bash,
         post_job_bash=post_job_bash,
         times_to_retry_job=times_to_retry_job,
+        job_profiles=job_profiles,
+        container=container,
+        input_file_paths=input_file_paths,
+        output_file_paths=output_file_paths,
+    )
+
+
+def run_container(
+    job_name: Locator,
+    docker_image_name: str,
+    docker_args: str,
+    docker_run_comand: str,
+    docker_tar_img: str,
+    *,
+    depends_on,
+    resource_request: Optional[ResourceRequest] = None,
+    category: Optional[str] = None,
+    pre_job_bash: str = "",
+    post_job_bash: str = "",
+    job_is_stageable: bool = False,
+    job_bypass_staging: bool = False,
+    times_to_retry_job: int = 0,
+    job_profiles: Iterable[PegasusProfile] = immutableset(),
+) -> DependencyNode:
+    _assert_singleton_workflow_builder()
+    return _SINGLETON_WORKFLOW_BUILDER.run_container(
+        job_name=job_name,
+        docker_image_name=docker_image_name,
+        docker_args=docker_args,
+        docker_run_comand=docker_run_comand,
+        docker_tar_path=docker_tar_img,
+        depends_on=depends_on,
+        resource_request=resource_request,
+        category=category,
+        job_is_stageable=job_is_stageable,
+        job_bypass_staging=job_bypass_staging,
+        pre_job_bash=pre_job_bash,
+        post_job_bash=post_job_bash,
+        times_to_retry_job=times_to_retry_job,
+        job_profiles=job_profiles,
     )
 
 
@@ -178,6 +230,66 @@ def add_container(
         checksum=checksum,
         metadata=metadata,
         bypass_staging=bypass_staging,
+    )
+
+
+def run_bash(
+    job_name: Locator,
+    command: Union[Iterable[str], str],
+    *,
+    depends_on,
+    resource_request: Optional[ResourceRequest] = None,
+    category: Optional[str] = None,
+    job_is_stageable: bool = False,
+    job_bypass_staging: bool = False,
+    times_to_retry_job: int = 0,
+    job_profiles: Iterable[PegasusProfile] = immutableset(),
+    container: Optional[Container] = None,
+    path_to_bash: Path = BASH_EXECUTABLE_PATH,
+) -> DependencyNode:
+    _assert_singleton_workflow_builder()
+    return _SINGLETON_WORKFLOW_BUILDER.run_bash(
+        job_name,
+        command,
+        depends_on=depends_on,
+        resource_request=resource_request,
+        category=category,
+        job_is_stageable=job_is_stageable,
+        job_bypass_staging=job_bypass_staging,
+        times_to_retry_job=times_to_retry_job,
+        job_profiles=job_profiles,
+        container=container,
+        path_to_bash=path_to_bash,
+    )
+
+
+def start_docker_as_service(
+    container: Container,
+    *,
+    depends_on,
+    mounts: Union[Iterable[str], str] = immutableset(),
+    docker_args: str = "",
+    resource_request: Optional[ResourceRequest] = None,
+) -> DependencyNode:
+    _assert_singleton_workflow_builder()
+    return _SINGLETON_WORKFLOW_BUILDER.start_docker_as_service(
+        container=container,
+        depends_on=depends_on,
+        mounts=mounts,
+        docker_args=docker_args,
+        resource_request=resource_request,
+    )
+
+
+def stop_docker_as_service(
+    container: Container,
+    *,
+    depends_on,
+    resource_request: Optional[ResourceRequest] = None,
+) -> DependencyNode:
+    _assert_singleton_workflow_builder()
+    return _SINGLETON_WORKFLOW_BUILDER.stop_docker_as_service(
+        container=container, depends_on=depends_on, resource_request=resource_request
     )
 
 
