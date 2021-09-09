@@ -845,6 +845,8 @@ class WorkflowBuilder:
             logging.info("Job %s recognized as duplicate", job_name)
             return self._signature_to_job[signature]
 
+        depends_on = _canonicalize_depends_on(depends_on)
+
         bash_transform = self._define_transformation(
             "bash",
             str(path_to_bash.absolute()),
@@ -861,6 +863,7 @@ class WorkflowBuilder:
 
         commands_with_ckpt = list(command)
         commands_with_ckpt.append(f"touch {ckpt_path.absolute()}")
+        commands_with_ckpt.insert(0, f"cd {job_dir}")
 
         job_script.write_text("\n".join(commands_with_ckpt))
         resource_request = self.set_resource_request(resource_request)
