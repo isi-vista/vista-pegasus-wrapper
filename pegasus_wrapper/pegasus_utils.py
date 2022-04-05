@@ -76,7 +76,7 @@ def add_saga_cluster_to_sites(
     )
 
     saga.add_env(
-        key="PEGASUS_HOME", value="/nas/gaia/shared/cluster/pegasus5/pegasus-5.0.0"
+        key="PEGASUS_HOME", value="/nas/gaia/shared/cluster/pegasus5/pegasus-5.0.2dev"
     )
 
     # Profiles
